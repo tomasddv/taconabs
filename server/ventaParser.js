@@ -14,6 +14,34 @@ const REQUIRED_HEADERS = [
   "Cantidad de Facturas"
 ];
 
+const ALLOWED_BRANDS = {
+  UNG: new Set([
+    "PEPSI",
+    "PEPSI BLACK",
+    "7 UP",
+    "7 UP FREE",
+    "MIRINDA",
+    "PASO DE LOS TOROS",
+    "H2OH",
+    "GATORADE",
+    "RED BULL",
+    "ROCKSTAR"
+  ]),
+  Aguas: new Set(["NESTLE PUREZA VITAL", "GLACIAR", "ECO DE LOS ANDES"]),
+  Marketplace: new Set([
+    "ANGELITA",
+    "APOSTOLES",
+    "PLAYADITO",
+    "JAGERMEISTER",
+    "RESTINGA",
+    "PATAGONIA MKTP",
+    "BUDWEISER MARKETPLACE",
+    "7 UP MARKETPLACE",
+    "STELLA ARTOIS MARKETPLACE"
+  ]),
+  Match: new Set([])
+};
+
 const FIELD_ALIASES = {
   fecha: ["Descripción Período"],
   clienteCodigo: ["Cod. Cliente"],
@@ -74,24 +102,12 @@ function normalizeText(value) {
 }
 
 function classifyBusiness(row) {
-  const text = normalizeText(
-    `${row.marca} ${row.calibre} ${row.division} ${row.productoEstadistico} ${row.unidadNegocio}`
-  );
-  if (text.includes("MARKETPLACE") || text.includes("MKTPLACE")) return "Marketplace";
-  if (text.includes("RED BULL")) return "Red Bull";
-  if (text.includes("AGUA") || text.includes("GLACIAR") || text.includes("NESTLE") || text.includes("ECO DE LOS ANDES")) {
-    return "Aguas";
-  }
-  if (text.includes("VINO") || text.includes("ESPUMANTE")) return "Vinos";
-  if (text.includes("SIDRA")) return "Sidras";
-  if (text.includes("GIN")) return "Gin";
-  if (text.includes("NON SUGAR") || text.includes("SIN AZUCAR") || text.includes("BLACK") || text.includes("FREE")) {
-    return "TOP + Non Sugar";
-  }
-  if (text.includes("GATORADE") || text.includes("PEPSI") || text.includes("7 UP") || text.includes("MIRINDA") || text.includes("H2OH")) {
-    return "UNG";
-  }
-  return row.unidadNegocio || row.division || "Otros";
+  const brand = normalizeText(row.marca);
+  if (ALLOWED_BRANDS.Match.has(brand)) return "Match";
+  if (ALLOWED_BRANDS.Marketplace.has(brand)) return "Marketplace";
+  if (ALLOWED_BRANDS.Aguas.has(brand)) return "Aguas";
+  if (ALLOWED_BRANDS.UNG.has(brand)) return "UNG";
+  return "Excluido";
 }
 
 function classifyFocus(row) {
@@ -317,9 +333,14 @@ export function applyFilters(rows, query = {}) {
   );
 }
 
+function isAllowedProduct(row) {
+  return ["UNG", "Aguas", "Marketplace", "Match"].includes(row.negocio);
+}
+
 export function summarizeVenta(parsed, query = {}) {
   const allRows = parsed.rows || parsed;
-  const rows = applyFilters(allRows, query);
+  const allowedRows = allRows.filter(isAllowedProduct);
+  const rows = applyFilters(allowedRows, query);
   const dateSet = new Set(rows.map((row) => row.fechaISO).filter(Boolean));
   const totals = {
     hl: sum(rows, "hl"),
@@ -344,6 +365,12 @@ export function summarizeVenta(parsed, query = {}) {
     source: "ventadiaria.txt",
     ignoredSources: ["ventadiaria bultos.txt"],
     totalRows: rows.length,
+    productScope: {
+      includedGroups: ["UNG", "Aguas", "Marketplace", "Match"],
+      includedBrands: Object.fromEntries(Object.entries(ALLOWED_BRANDS).map(([group, brands]) => [group, [...brands]])),
+      includedRows: allowedRows.length,
+      excludedRows: allRows.length - allowedRows.length
+    },
     totals,
     executive: makeExecutive(totals, dateSet),
     byDay: groupBy(rows, "fecha").sort((a, b) => String(a.label).localeCompare(String(b.label))),
@@ -378,8 +405,8 @@ export function summarizeVenta(parsed, query = {}) {
       pendingActivations: []
     },
     operationalDetail: rows.slice(0, 500),
-    filters: filterOptions(allRows),
-    quality: dataQuality(allRows, parsed.headers || [], parsed.headerIssues || []),
+    filters: filterOptions(allowedRows),
+    quality: dataQuality(allowedRows, parsed.headers || [], parsed.headerIssues || []),
     unavailable: [
       "Objetivo mensual, avance contra objetivo y faltante requieren el Excel mensual de focos/objetivos con metas normalizadas.",
       "Clientes sin compra y % cobertura contra cartera requieren una base de universo/cartera.",

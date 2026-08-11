@@ -275,7 +275,7 @@ function App() {
       <header className="topbar">
         <div>
           <h1>Dashboard Ventas Diarias</h1>
-          <p>Fuente activa: ventadiaria.txt. Bultos excluido.</p>
+          <p>Fuente activa: ventadiaria.txt. Solo UNG, Aguas, MKTP y Match.</p>
         </div>
         <button className="iconButton" onClick={() => load()} disabled={loading} title="Actualizar">
           <RefreshCw size={18} />
@@ -428,6 +428,8 @@ function App() {
               <p>Registros cargados: {number(data?.quality?.loadedRows, 0)}</p>
               <p>Duplicados detectados: {number(data?.quality?.duplicates, 0)}</p>
               <p>Columnas faltantes: {(data?.quality?.missingHeaders || []).join(", ") || "Sin faltantes"}</p>
+              <p>Filas incluidas por alcance: {number(data?.productScope?.includedRows, 0)}</p>
+              <p>Filas excluidas por marca/negocio: {number(data?.productScope?.excludedRows, 0)}</p>
             </div>
             {(data?.unavailable || []).map((item) => (
               <div className="note" key={item}>{item}</div>
