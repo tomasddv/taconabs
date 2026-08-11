@@ -421,16 +421,19 @@ function App() {
               <Metric title="Filtro SKU" value={filters.sku ? "Activo" : "Todos"} sub={filters.marca || "Marca: todas"} icon={Filter} />
             </section>
             <section className="wideGrid">
-              <Panel title="Activaciones día a día" sub="Clientes con compra por fecha." icon={CalendarDays}>
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={data?.customerPurchases?.dailyTrend || []}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tickFormatter={(value) => number(value, 0)} />
-                    <Tooltip formatter={(value) => number(value, 0)} />
-                    <Bar dataKey="clientes" fill="#0f766e" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <Panel title="Total de activaciones por promotor" sub="Cliente con compra por día, según período, marca y SKU filtrados." icon={CalendarDays}>
+                <SimpleTable
+                  columns={[
+                    { key: "promotor", label: "Promotor" },
+                    { key: "activaciones", label: "Activaciones", render: (v) => number(v, 0) },
+                    { key: "clientes", label: "Clientes únicos", render: (v) => number(v, 0) },
+                    { key: "hl", label: "HL", render: (v) => number(v) },
+                    { key: "importeNeto", label: "Importe", render: (v) => money(v) },
+                    { key: "facturas", label: "Facturas", render: (v) => number(v, 0) }
+                  ]}
+                  rows={data?.customerPurchases?.bySeller || []}
+                  limit={40}
+                />
               </Panel>
               <Panel title="Detalle de clientes con compra" sub="Filtrable por período, marca, SKU, promotor, cliente y calibre." icon={Search}>
                 <div className="detailTools">

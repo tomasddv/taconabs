@@ -350,6 +350,41 @@ function dailyCustomerActivations(rows) {
   }, new Map());
 }
 
+function customerActivationsBySeller(rows) {
+  const grouped = new Map();
+  for (const row of customerPurchasesByDay(rows)) {
+    const sellers = row.promotor.split(",").map((seller) => seller.trim()).filter(Boolean);
+    for (const seller of sellers.length ? sellers : ["Sin dato"]) {
+      const current = grouped.get(seller) || {
+        label: seller,
+        promotor: seller,
+        activaciones: 0,
+        clientesSet: new Set(),
+        hl: 0,
+        importeNeto: 0,
+        facturas: 0
+      };
+      current.activaciones += 1;
+      current.clientesSet.add(row.clienteCodigo || row.cliente);
+      current.hl += row.hl;
+      current.importeNeto += row.importeNeto;
+      current.facturas += row.facturas;
+      grouped.set(seller, current);
+    }
+  }
+  return [...grouped.values()]
+    .map((item) => ({
+      label: item.label,
+      promotor: item.promotor,
+      activaciones: item.activaciones,
+      clientes: item.clientesSet.size,
+      hl: item.hl,
+      importeNeto: item.importeNeto,
+      facturas: item.facturas
+    }))
+    .sort((a, b) => b.activaciones - a.activaciones);
+}
+
 function makeExecutive(totals, dates, objective = null) {
   const sortedDates = [...dates].filter(Boolean).sort();
   const elapsedBusinessDays = sortedDates.length;
@@ -516,6 +551,7 @@ export function summarizeVenta(parsed, query = {}) {
     },
     customerPurchases: {
       totalClientes: distinctCount(rows, "clienteCodigo"),
+      bySeller: customerActivationsBySeller(rows),
       dailyTrend: customerPurchaseTrend,
       detail: customerPurchaseDetail
     },
