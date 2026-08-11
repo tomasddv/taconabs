@@ -107,6 +107,38 @@ form button:disabled {
   margin-bottom: 14px;
 }
 
+.sheetTabs {
+  background: #ffffff;
+  border: 1px solid #d8e0e9;
+  border-radius: 8px;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  padding: 8px;
+}
+
+.sheetTabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: #475467;
+  cursor: pointer;
+  font-weight: 680;
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.sheetTabs button.active {
+  background: #18212f;
+  color: #ffffff;
+}
+
+.sheetBody {
+  min-height: 420px;
+}
+
 .metricsGrid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -286,6 +318,12 @@ th {
   gap: 12px;
 }
 
+.threeGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .spacer {
   height: 12px;
 }
@@ -340,7 +378,8 @@ form {
   }
 
   .chartGrid,
-  .wideGrid {
+  .wideGrid,
+  .threeGrid {
     grid-template-columns: 1fr;
   }
 
