@@ -19,11 +19,11 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, source: "ventadiaria.txt" });
 });
 
-app.get("/api/dashboard", async (_req, res, next) => {
+app.get("/api/dashboard", async (req, res, next) => {
   try {
     const buffer = await downloadDriveFile(config.ventaDiariaFileId);
-    const rows = parseVentaDiaria(buffer);
-    res.json(summarizeVenta(rows));
+    const parsed = parseVentaDiaria(buffer);
+    res.json(summarizeVenta(parsed, req.query));
   } catch (error) {
     next(error);
   }
