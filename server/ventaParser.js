@@ -238,6 +238,52 @@ function groupBy(rows, key, sortMetric = "hl") {
     .sort((a, b) => (b[sortMetric] || 0) - (a[sortMetric] || 0));
 }
 
+function brandDistributionBySellerBrandCaliber(rows) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const seller = row.vendedor || "Sin dato";
+    const brand = row.marca || "Sin marca";
+    const caliber = row.calibre || "Sin calibre";
+    const key = `${seller}|${brand}|${caliber}`;
+    const current = grouped.get(key) || {
+      label: seller,
+      promotor: seller,
+      marca: brand,
+      calibre: caliber,
+      rows: 0,
+      clientesSet: new Set(),
+      skuSet: new Set(),
+      hl: 0,
+      importeNeto: 0,
+      importeFinal: 0,
+      facturas: 0
+    };
+    current.rows += 1;
+    current.clientesSet.add(row.clienteCodigo || row.cliente);
+    current.skuSet.add(row.articuloCodigo || row.articulo);
+    current.hl += row.hl;
+    current.importeNeto += row.importeNeto;
+    current.importeFinal += row.importeFinal;
+    current.facturas += row.facturas;
+    grouped.set(key, current);
+  }
+  return [...grouped.values()]
+    .map((item) => ({
+      label: item.label,
+      promotor: item.promotor,
+      marca: item.marca,
+      calibre: item.calibre,
+      clientes: item.clientesSet.size,
+      skus: item.skuSet.size,
+      hl: item.hl,
+      importeNeto: item.importeNeto,
+      importeFinal: item.importeFinal,
+      facturas: item.facturas,
+      rows: item.rows
+    }))
+    .sort((a, b) => a.promotor.localeCompare(b.promotor) || a.marca.localeCompare(b.marca) || b.clientes - a.clientes);
+}
+
 function makeExecutive(totals, dates, objective = null) {
   const sortedDates = [...dates].filter(Boolean).sort();
   const elapsedBusinessDays = sortedDates.length;
@@ -390,6 +436,7 @@ export function summarizeVenta(parsed, query = {}) {
       skusByClient: groupBy(rows, "cliente", "skus"),
       distributionByProduct: byProduct,
       topActivation: groupBy(rows, "vendedor", "skus"),
+      byPromotorMarcaCalibre: brandDistributionBySellerBrandCaliber(rows),
       focusGroups: byFocus
     },
     marketplace: {

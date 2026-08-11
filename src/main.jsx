@@ -381,8 +381,21 @@ function App() {
             <Panel title="SKUs por cliente" sub="Clientes con mayor cantidad de SKUs distintos." icon={Database}>
               <SimpleTable columns={[{ key: "label", label: "Cliente" }, { key: "skus", label: "SKUs", render: (v) => number(v, 0) }, { key: "clientes", label: "Clientes", render: (v) => number(v, 0) }, { key: "hl", label: "HL", render: (v) => number(v) }]} rows={data?.brandDistribution?.skusByClient || []} limit={24} />
             </Panel>
-            <Panel title="Focos principales" sub="Tablero CCC UNG, Familiares, Non Sugar, Gatorade, Aguas." icon={BarChart3}>
-              <SimpleTable columns={sellerColumns} rows={data?.brandDistribution?.focusGroups || []} limit={16} />
+            <Panel title="Brand Distribution por promotor" sub="Total por promotor, marca y calibre." icon={BarChart3}>
+              <SimpleTable
+                columns={[
+                  { key: "promotor", label: "Promotor" },
+                  { key: "marca", label: "Marca" },
+                  { key: "calibre", label: "Calibre" },
+                  { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
+                  { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
+                  { key: "hl", label: "HL", render: (v) => number(v) },
+                  { key: "importeNeto", label: "Importe", render: (v) => money(v) },
+                  { key: "facturas", label: "Facturas", render: (v) => number(v, 0) }
+                ]}
+                rows={data?.brandDistribution?.byPromotorMarcaCalibre || []}
+                limit={40}
+              />
             </Panel>
           </section>
         ) : null}
