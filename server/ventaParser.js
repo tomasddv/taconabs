@@ -284,6 +284,72 @@ function brandDistributionBySellerBrandCaliber(rows) {
     .sort((a, b) => a.promotor.localeCompare(b.promotor) || a.marca.localeCompare(b.marca) || b.clientes - a.clientes);
 }
 
+function customerPurchasesByDay(rows) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const day = row.fechaISO || row.fecha || "Sin fecha";
+    const clientCode = row.clienteCodigo || row.cliente || "Sin cliente";
+    const key = `${day}|${clientCode}`;
+    const current = grouped.get(key) || {
+      label: day,
+      fecha: row.fecha,
+      fechaISO: row.fechaISO,
+      clienteCodigo: row.clienteCodigo,
+      cliente: row.cliente,
+      promotoresSet: new Set(),
+      marcasSet: new Set(),
+      calibresSet: new Set(),
+      skuSet: new Set(),
+      hl: 0,
+      importeNeto: 0,
+      importeFinal: 0,
+      facturas: 0,
+      rows: 0
+    };
+    current.promotoresSet.add(row.vendedor);
+    current.marcasSet.add(row.marca);
+    current.calibresSet.add(row.calibre);
+    current.skuSet.add(row.articuloCodigo || row.articulo);
+    current.hl += row.hl;
+    current.importeNeto += row.importeNeto;
+    current.importeFinal += row.importeFinal;
+    current.facturas += row.facturas;
+    current.rows += 1;
+    grouped.set(key, current);
+  }
+  return [...grouped.values()]
+    .map((item) => ({
+      label: item.fechaISO || item.fecha,
+      fecha: item.fecha,
+      fechaISO: item.fechaISO,
+      clienteCodigo: item.clienteCodigo,
+      cliente: item.cliente,
+      promotor: [...item.promotoresSet].filter(Boolean).join(", ") || "Sin dato",
+      marcas: [...item.marcasSet].filter(Boolean).join(", "),
+      calibres: [...item.calibresSet].filter(Boolean).join(", "),
+      skus: item.skuSet.size,
+      hl: item.hl,
+      importeNeto: item.importeNeto,
+      importeFinal: item.importeFinal,
+      facturas: item.facturas,
+      rows: item.rows
+    }))
+    .sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)) || a.cliente.localeCompare(b.cliente));
+}
+
+function dailyCustomerActivations(rows) {
+  return customerPurchasesByDay(rows).reduce((acc, row) => {
+    const key = row.fechaISO || row.fecha || "Sin fecha";
+    const current = acc.get(key) || { label: row.fecha || key, fechaISO: row.fechaISO, clientes: 0, hl: 0, importeNeto: 0, facturas: 0 };
+    current.clientes += 1;
+    current.hl += row.hl;
+    current.importeNeto += row.importeNeto;
+    current.facturas += row.facturas;
+    acc.set(key, current);
+    return acc;
+  }, new Map());
+}
+
 function makeExecutive(totals, dates, objective = null) {
   const sortedDates = [...dates].filter(Boolean).sort();
   const elapsedBusinessDays = sortedDates.length;
@@ -347,12 +413,14 @@ function filterOptions(rows) {
   return {
     mes: [...new Set(rows.map((row) => row.fechaISO.slice(0, 7)).filter(Boolean))].sort(),
     fecha: optionFor("fecha"),
+    fechaISO: optionFor("fechaISO"),
     promotor: optionFor("vendedor"),
     supervisor: [],
     negocio: optionFor("negocio"),
     grupoProducto: optionFor("productoEstadistico"),
     marca: optionFor("marca"),
     calibre: optionFor("calibre"),
+    sku: optionFor("articulo"),
     canal: optionFor("ramo"),
     cliente: optionFor("cliente")
   };
@@ -362,11 +430,14 @@ export function applyFilters(rows, query = {}) {
   const filterMap = {
     mes: (row, value) => row.fechaISO.startsWith(value),
     fecha: (row, value) => row.fecha === value,
+    fechaDesde: (row, value) => !row.fechaISO || row.fechaISO >= value,
+    fechaHasta: (row, value) => !row.fechaISO || row.fechaISO <= value,
     promotor: (row, value) => row.vendedor === value,
     negocio: (row, value) => row.negocio === value,
     grupoProducto: (row, value) => row.productoEstadistico === value,
     marca: (row, value) => row.marca === value,
     calibre: (row, value) => row.calibre === value,
+    sku: (row, value) => row.articulo === value,
     canal: (row, value) => row.ramo === value,
     cliente: (row, value) => row.cliente === value
   };
@@ -405,6 +476,10 @@ export function summarizeVenta(parsed, query = {}) {
   const byProduct = groupBy(rows, "productoEstadistico");
   const byMarketplace = rows.filter((row) => row.negocio === "Marketplace");
   const byCombo = rows.filter((row) => row.combos > 0);
+  const customerPurchaseDetail = customerPurchasesByDay(rows);
+  const customerPurchaseTrend = [...dailyCustomerActivations(rows).values()].sort((a, b) =>
+    String(a.fechaISO).localeCompare(String(b.fechaISO))
+  );
 
   return {
     generatedAt: new Date().toISOString(),
@@ -438,6 +513,11 @@ export function summarizeVenta(parsed, query = {}) {
       topActivation: groupBy(rows, "vendedor", "skus"),
       byPromotorMarcaCalibre: brandDistributionBySellerBrandCaliber(rows),
       focusGroups: byFocus
+    },
+    customerPurchases: {
+      totalClientes: distinctCount(rows, "clienteCodigo"),
+      dailyTrend: customerPurchaseTrend,
+      detail: customerPurchaseDetail
     },
     marketplace: {
       gmvTotal: sum(byMarketplace, "importeNeto"),

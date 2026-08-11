@@ -33,6 +33,7 @@ const SHEETS = [
   { id: "volumen", label: "Volumen" },
   { id: "coberturas", label: "Coberturas / CCC" },
   { id: "brand", label: "Brand / SKUs" },
+  { id: "clientes", label: "Clientes con Compra" },
   { id: "marketplace", label: "Marketplace" },
   { id: "combos", label: "Combos y Focos" },
   { id: "detalle", label: "Detalle Operativo" },
@@ -111,12 +112,21 @@ function Filters({ data, filters, setFilters, refresh, loading }) {
     <Panel title="Filtros" sub="Mes, fecha de corte, promotor, negocio, producto, marca, calibre, canal y cliente." icon={Filter}>
       <div className="filterGrid">
         <SelectFilter label="Mes" value={filters.mes} options={options.mes} onChange={(v) => update("mes", v)} />
+        <label>
+          Desde
+          <input type="date" value={filters.fechaDesde || ""} onChange={(event) => update("fechaDesde", event.target.value)} />
+        </label>
+        <label>
+          Hasta
+          <input type="date" value={filters.fechaHasta || ""} onChange={(event) => update("fechaHasta", event.target.value)} />
+        </label>
         <SelectFilter label="Fecha" value={filters.fecha} options={options.fecha} onChange={(v) => update("fecha", v)} />
         <SelectFilter label="Promotor" value={filters.promotor} options={options.promotor} onChange={(v) => update("promotor", v)} />
         <SelectFilter label="Negocio" value={filters.negocio} options={options.negocio} onChange={(v) => update("negocio", v)} />
         <SelectFilter label="Grupo producto" value={filters.grupoProducto} options={options.grupoProducto} onChange={(v) => update("grupoProducto", v)} />
         <SelectFilter label="Marca" value={filters.marca} options={options.marca} onChange={(v) => update("marca", v)} />
         <SelectFilter label="Calibre" value={filters.calibre} options={options.calibre} onChange={(v) => update("calibre", v)} />
+        <SelectFilter label="SKU" value={filters.sku} options={options.sku} onChange={(v) => update("sku", v)} />
         <SelectFilter label="Canal" value={filters.canal} options={options.canal} onChange={(v) => update("canal", v)} />
         <SelectFilter label="Cliente" value={filters.cliente} options={options.cliente} onChange={(v) => update("cliente", v)} />
       </div>
@@ -203,8 +213,10 @@ function UploadPanel() {
   );
 }
 
-function downloadDetail(rows) {
-  const headers = ["fecha", "vendedor", "cliente", "marca", "calibre", "productoEstadistico", "negocio", "hl", "importeNeto", "facturas"];
+function downloadDetail(rows, preferredHeaders = null) {
+  const headers =
+    preferredHeaders ||
+    ["fecha", "vendedor", "cliente", "marca", "calibre", "productoEstadistico", "negocio", "hl", "importeNeto", "facturas"];
   const csv = [headers.join(",")]
     .concat(
       (rows || []).map((row) =>
@@ -398,6 +410,70 @@ function App() {
               />
             </Panel>
           </section>
+        ) : null}
+
+        {activeSheet === "clientes" ? (
+          <>
+            <section className="metricsGrid">
+              <Metric title="Clientes con compra" value={number(data?.customerPurchases?.totalClientes, 0)} sub="Únicos en el período filtrado" icon={CheckCircle2} />
+              <Metric title="Días con activación" value={number(data?.customerPurchases?.dailyTrend?.length, 0)} sub="Según rango Desde / Hasta" icon={CalendarDays} />
+              <Metric title="Registros diarios" value={number(data?.customerPurchases?.detail?.length, 0)} sub="Cliente por día" icon={Database} />
+              <Metric title="Filtro SKU" value={filters.sku ? "Activo" : "Todos"} sub={filters.marca || "Marca: todas"} icon={Filter} />
+            </section>
+            <section className="wideGrid">
+              <Panel title="Activaciones día a día" sub="Clientes con compra por fecha." icon={CalendarDays}>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={data?.customerPurchases?.dailyTrend || []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tickFormatter={(value) => number(value, 0)} />
+                    <Tooltip formatter={(value) => number(value, 0)} />
+                    <Bar dataKey="clientes" fill="#0f766e" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Panel>
+              <Panel title="Detalle de clientes con compra" sub="Filtrable por período, marca, SKU, promotor, cliente y calibre." icon={Search}>
+                <div className="detailTools">
+                  <button
+                    className="secondaryButton"
+                    type="button"
+                    onClick={() =>
+                      downloadDetail(data?.customerPurchases?.detail || [], [
+                        "fecha",
+                        "clienteCodigo",
+                        "cliente",
+                        "promotor",
+                        "marcas",
+                        "calibres",
+                        "skus",
+                        "hl",
+                        "importeNeto",
+                        "facturas"
+                      ])
+                    }
+                  >
+                    <Download size={16} />
+                    Exportar
+                  </button>
+                </div>
+                <SimpleTable
+                  columns={[
+                    { key: "fecha", label: "Fecha" },
+                    { key: "cliente", label: "Cliente" },
+                    { key: "promotor", label: "Promotor" },
+                    { key: "marcas", label: "Marcas" },
+                    { key: "calibres", label: "Calibres" },
+                    { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
+                    { key: "hl", label: "HL", render: (v) => number(v) },
+                    { key: "importeNeto", label: "Importe", render: (v) => money(v) },
+                    { key: "facturas", label: "Facturas", render: (v) => number(v, 0) }
+                  ]}
+                  rows={data?.customerPurchases?.detail || []}
+                  limit={60}
+                />
+              </Panel>
+            </section>
+          </>
         ) : null}
 
         {activeSheet === "marketplace" ? (
