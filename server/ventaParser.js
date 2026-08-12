@@ -677,6 +677,9 @@ export function summarizeVenta(parsed, query = {}, context = {}) {
   const objectiveDistribution = context.distributeObjective
     ? context.distributeObjective({ currentRows: rows, query })
     : null;
+  const objectivePerformance = context.buildObjectivePerformance
+    ? context.buildObjectivePerformance({ rows, dateSet })
+    : [];
 
   return {
     generatedAt: new Date().toISOString(),
@@ -721,6 +724,7 @@ export function summarizeVenta(parsed, query = {}, context = {}) {
       detail: customerPurchaseDetail
     },
     objectiveDistribution,
+    objectivePerformance,
     marketplace: {
       gmvTotal: sum(byMarketplace, "importeNeto"),
       gmvByCategory: groupBy(byMarketplace, "foco"),

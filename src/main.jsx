@@ -30,6 +30,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:4100";
 const SHEETS = [
   { id: "resumen", label: "Resumen Ejecutivo" },
   { id: "seguimiento", label: "Seguimiento" },
+  { id: "objetivos", label: "Performance Objetivos" },
   { id: "volumen", label: "Volumen" },
   { id: "coberturas", label: "Coberturas / CCC" },
   { id: "brand", label: "Brand / SKUs" },
@@ -404,6 +405,37 @@ function App() {
               <SimpleTable columns={sellerColumns} rows={data?.bySellerCcc || []} limit={24} />
             </Panel>
           </section>
+        ) : null}
+
+        {activeSheet === "objetivos" ? (
+          <Panel title="Performance objetivos agosto" sub="Detalle de cada objetivo del Excel mensual contra la venta diaria filtrada." icon={FileSpreadsheet}>
+            <section className="inlineMetrics">
+              <Metric title="Objetivos con avance" value={number(data?.objectivePerformance?.length, 0)} sub={data?.objectiveDistribution?.source || "Excel mensual"} />
+              <Metric
+                title="Promedio avance"
+                value={percent(
+                  (data?.objectivePerformance || []).length
+                    ? (data.objectivePerformance || []).reduce((total, row) => total + (row.avance || 0), 0) / data.objectivePerformance.length
+                    : null
+                )}
+                sub="Promedio simple"
+              />
+            </section>
+            <SimpleTable
+              columns={[
+                { key: "label", label: "Objetivo" },
+                { key: "tipo", label: "Tipo" },
+                { key: "objetivo", label: "Objetivo", render: (v) => number(v, 0) },
+                { key: "real", label: "Real", render: (v) => number(v, 0) },
+                { key: "avance", label: "Avance", render: (v) => percent(v) },
+                { key: "faltante", label: "Faltante", render: (v) => number(v, 0) },
+                { key: "tendencia", label: "Tendencia", render: (v) => number(v, 0) },
+                { key: "tendenciaAvance", label: "Tend. avance", render: (v) => percent(v) }
+              ]}
+              rows={data?.objectivePerformance || []}
+              limit={40}
+            />
+          </Panel>
         ) : null}
 
         {activeSheet === "volumen" ? (

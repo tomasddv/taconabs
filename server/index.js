@@ -6,7 +6,7 @@ import multer from "multer";
 import { config } from "./config.js";
 import { downloadDriveFile, uploadFileToDrive } from "./drive.js";
 import { parseVentaDiaria, summarizeVenta } from "./ventaParser.js";
-import { distributeObjective, loadComboObjective, loadObjectiveWorkbook, objectiveKeyForQuery } from "./objectives.js";
+import { buildObjectivePerformance, distributeObjective, loadComboObjective, loadObjectiveWorkbook, objectiveKeyForQuery } from "./objectives.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -39,6 +39,7 @@ app.get("/api/dashboard", async (req, res, next) => {
             historicalRows,
             currentRows
           }),
+        buildObjectivePerformance: ({ rows, dateSet }) => buildObjectivePerformance({ objective, rows, dateSet }),
         comboObjective
       })
     );

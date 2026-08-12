@@ -159,6 +159,43 @@ function rowMatchesObjective(row, objectiveKey) {
   return row.negocio !== "Marketplace";
 }
 
+function isBlack(row) {
+  const text = normalizeText(`${row.marca} ${row.productoEstadistico} ${row.articulo}`);
+  return text.includes("BLACK") || text.includes("FREE") || text.includes("NON SUGAR");
+}
+
+function isH2oh(row) {
+  return normalizeText(`${row.marca} ${row.productoEstadistico}`).includes("H2OH");
+}
+
+function isConvivencia(row) {
+  const text = normalizeText(`${row.calibre} ${row.articulo} ${row.productoEstadistico}`);
+  return text.includes("1500") || text.includes("1.5") || text.includes("1,5") || text.includes("2000") || text.includes("2L");
+}
+
+function brandDistributionCount(rows) {
+  return new Set(rows.map((row) => `${row.clienteCodigo || row.cliente}|${row.articuloCodigo || row.articulo}`).filter(Boolean)).size;
+}
+
+function cccCount(rows) {
+  return new Set(rows.map((row) => row.clienteCodigo || row.cliente).filter(Boolean)).size;
+}
+
+const PERFORMANCE_DEFINITIONS = [
+  { key: "BD TOTAL NABS", label: "BD Total NABS", tipo: "BD", matcher: (row) => row.negocio !== "Marketplace", calc: brandDistributionCount },
+  { key: "BD GATORADE", label: "BD Gatorade", tipo: "BD", matcher: (row) => row.marca === "GATORADE", calc: brandDistributionCount },
+  { key: "BD CSDs MS", label: "BD CSDs MS", tipo: "BD", matcher: isCsd, calc: brandDistributionCount },
+  { key: "BD TOP", label: "BD TOP", tipo: "BD", matcher: isTop, calc: brandDistributionCount },
+  { key: "BD ENERGIA", label: "BD Energia", tipo: "BD", matcher: isEnergy, calc: brandDistributionCount },
+  { key: "BD AGUAS", label: "BD Aguas", tipo: "BD", matcher: (row) => row.negocio === "Aguas", calc: brandDistributionCount },
+  { key: "BD MARKETPLACE PURO", label: "BD Marketplace puro", tipo: "BD", matcher: (row) => row.negocio === "Marketplace", calc: brandDistributionCount },
+  { key: "CCC NABS", label: "CCC NABS", tipo: "CCC", matcher: (row) => row.negocio !== "Marketplace", calc: cccCount },
+  { key: "CCC BLACK", label: "CCC Black", tipo: "CCC", matcher: isBlack, calc: cccCount },
+  { key: "CCC H2Oh", label: "CCC H2Oh", tipo: "CCC", matcher: isH2oh, calc: cccCount },
+  { key: "CONVIVENCIA 1,5L y 2L", label: "Convivencia 1,5L y 2L", tipo: "CCC", matcher: isConvivencia, calc: cccCount },
+  { key: "BD SS", label: "BD SS", tipo: "BD", matcher: isBlack, calc: brandDistributionCount }
+];
+
 export function objectiveKeyForQuery(query = {}) {
   const brand = normalizeText(query.marca);
   const business = normalizeText(query.negocio);
@@ -170,6 +207,29 @@ export function objectiveKeyForQuery(query = {}) {
   if (brand.includes("BLACK") || brand.includes("FREE") || group.includes("NON SUGAR") || group.includes("TOP")) return "BD TOP";
   if (brand && ["PEPSI", "7 UP", "MIRINDA", "PASO DE LOS TOROS", "H2OH"].some((item) => brand.includes(item))) return "BD CSDs MS";
   return "BD TOTAL NABS";
+}
+
+export function buildObjectivePerformance({ objective, rows, dateSet }) {
+  if (!objective?.values) return [];
+  const elapsedDays = Math.max(dateSet?.size || 0, 1);
+  const assumedBusinessDays = 26;
+  return PERFORMANCE_DEFINITIONS.map((definition) => {
+    const objectiveValue = numberValue(objective.values[definition.key]);
+    const matchedRows = (rows || []).filter(definition.matcher);
+    const real = definition.calc(matchedRows);
+    const projected = (real / elapsedDays) * assumedBusinessDays;
+    return {
+      label: definition.label,
+      objetivo: objectiveValue,
+      real,
+      avance: objectiveValue ? real / objectiveValue : null,
+      faltante: Math.max(objectiveValue - real, 0),
+      tendencia: projected,
+      tendenciaAvance: objectiveValue ? projected / objectiveValue : null,
+      tipo: definition.tipo,
+      fuente: objective.source
+    };
+  }).filter((row) => row.objetivo > 0);
 }
 
 export function distributeObjective({ objective, objectiveKey, historicalRows, currentRows }) {
