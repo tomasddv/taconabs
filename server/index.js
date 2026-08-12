@@ -79,6 +79,18 @@ app.post("/api/monthly-focus", upload.single("file"), async (req, res, next) => 
   }
 });
 
+const distDir = path.join(rootDir, "dist");
+
+app.use(express.static(distDir));
+
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api/")) {
+    next();
+    return;
+  }
+  res.sendFile(path.join(distDir, "index.html"));
+});
+
 app.use((error, _req, res, _next) => {
   console.error(error);
   res.status(500).json({ error: error.message || "Error interno" });
@@ -97,7 +109,10 @@ async function getObjective() {
 
 async function getComboObjective() {
   if (comboObjectiveCache === undefined) {
-    comboObjectiveCache = await loadComboObjective({ localPath: config.seguimientoLocalPath });
+    comboObjectiveCache = await loadComboObjective({
+      localPath: config.seguimientoLocalPath,
+      fallback: config.comboObjectiveFallback
+    });
   }
   return comboObjectiveCache;
 }

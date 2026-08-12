@@ -3,6 +3,7 @@ dist/
 .env
 uploads/*
 !uploads/.gitkeep
+!uploads/objetivos-agosto-202608.xlsx
 *.log
 __pycache__/
 *.pyc

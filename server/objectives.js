@@ -146,8 +146,8 @@ export async function loadObjectiveWorkbook({ localPath, driveFileId, rootDir })
   };
 }
 
-export async function loadComboObjective({ localPath }) {
-  if (!localPath) return null;
+export async function loadComboObjective({ localPath, fallback = null }) {
+  if (!localPath) return fallback;
   try {
     const buffer = await fs.readFile(path.resolve(localPath));
     const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
@@ -156,9 +156,9 @@ export async function loadComboObjective({ localPath }) {
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
     const row = rows.find((item) => normalizeText(item[1]) === "COBERTURA COMBOS FOCOS");
     const objective = numberValue(row?.[3]);
-    return objective || null;
+    return objective || fallback;
   } catch {
-    return null;
+    return fallback;
   }
 }
 

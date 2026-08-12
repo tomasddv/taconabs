@@ -26,7 +26,7 @@ import {
 } from "recharts";
 import "./styles.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:4100";
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "" : "http://127.0.0.1:4100");
 const SHEETS = [
   { id: "resumen", label: "Resumen Ejecutivo" },
   { id: "seguimiento", label: "Seguimiento" },
