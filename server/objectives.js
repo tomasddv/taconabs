@@ -41,6 +41,29 @@ function rowsFromWorkbook(buffer) {
   return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
 }
 
+export async function loadAuxiliaryRules({ driveFileId }) {
+  if (!driveFileId) return { familiarPairs: new Set() };
+  try {
+    const buffer = await downloadDriveFile(driveFileId);
+    const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: null });
+    const headers = rows[0] || [];
+    const cprIndex = headers.findIndex((header) => normalizeText(header) === "CALIBRES CPR");
+    const brandIndex = headers.findLastIndex((header, index) => index < cprIndex && normalizeText(header) === "MARCA");
+    const caliberIndex = headers.findLastIndex((header, index) => index < cprIndex && normalizeText(header) === "CALIBRE");
+    const familiarPairs = new Set();
+    for (const row of rows.slice(1)) {
+      if (normalizeText(row[cprIndex]) !== "FAMILIARES") continue;
+      const brand = normalizeText(row[brandIndex]);
+      const caliber = normalizeText(row[caliberIndex]);
+      if (brand && caliber) familiarPairs.add(`${brand}|${caliber}`);
+    }
+    return { familiarPairs };
+  } catch {
+    return { familiarPairs: new Set() };
+  }
+}
+
 function parseSellerHlObjectives(buffer) {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: null });
@@ -144,17 +167,23 @@ function isCsd(row) {
   return ["PEPSI", "PEPSI BLACK", "7 UP", "7 UP FREE", "MIRINDA", "PASO DE LOS TOROS", "H2OH"].includes(row.marca);
 }
 
+function isCsdMs(row, auxiliaryRules) {
+  if (!isCsd(row)) return false;
+  const pair = `${normalizeText(row.marca)}|${normalizeText(row.calibre)}`;
+  return auxiliaryRules?.familiarPairs?.has(pair);
+}
+
 function isTop(row) {
   const text = normalizeText(`${row.marca} ${row.productoEstadistico} ${row.foco}`);
   return text.includes("BLACK") || text.includes("FREE") || text.includes("NON SUGAR") || text.includes("TOP");
 }
 
-function rowMatchesObjective(row, objectiveKey) {
+function rowMatchesObjective(row, objectiveKey, auxiliaryRules) {
   if (objectiveKey === "BD GATORADE") return row.marca === "GATORADE";
   if (objectiveKey === "BD AGUAS") return row.negocio === "Aguas";
   if (objectiveKey === "BD MARKETPLACE PURO") return row.negocio === "Marketplace";
   if (objectiveKey === "BD ENERGIA") return isEnergy(row);
-  if (objectiveKey === "BD CSDs MS") return isCsd(row);
+  if (objectiveKey === "BD CSDs MS") return isCsdMs(row, auxiliaryRules);
   if (objectiveKey === "BD TOP") return isTop(row);
   return row.negocio !== "Marketplace";
 }
@@ -181,10 +210,11 @@ function cccCount(rows) {
   return new Set(rows.map((row) => row.clienteCodigo || row.cliente).filter(Boolean)).size;
 }
 
-const PERFORMANCE_DEFINITIONS = [
+function performanceDefinitions(auxiliaryRules) {
+  return [
   { key: "BD TOTAL NABS", label: "BD Total NABS", tipo: "BD", matcher: (row) => row.negocio !== "Marketplace", calc: brandDistributionCount },
   { key: "BD GATORADE", label: "BD Gatorade", tipo: "BD", matcher: (row) => row.marca === "GATORADE", calc: brandDistributionCount },
-  { key: "BD CSDs MS", label: "BD CSDs MS", tipo: "BD", matcher: isCsd, calc: brandDistributionCount },
+  { key: "BD CSDs MS", label: "BD CSDs MS", tipo: "BD", matcher: (row) => isCsdMs(row, auxiliaryRules), calc: brandDistributionCount },
   { key: "BD TOP", label: "BD TOP", tipo: "BD", matcher: isTop, calc: brandDistributionCount },
   { key: "BD ENERGIA", label: "BD Energia", tipo: "BD", matcher: isEnergy, calc: brandDistributionCount },
   { key: "BD AGUAS", label: "BD Aguas", tipo: "BD", matcher: (row) => row.negocio === "Aguas", calc: brandDistributionCount },
@@ -194,7 +224,8 @@ const PERFORMANCE_DEFINITIONS = [
   { key: "CCC H2Oh", label: "CCC H2Oh", tipo: "CCC", matcher: isH2oh, calc: cccCount },
   { key: "CONVIVENCIA 1,5L y 2L", label: "Convivencia 1,5L y 2L", tipo: "CCC", matcher: isConvivencia, calc: cccCount },
   { key: "BD SS", label: "BD SS", tipo: "BD", matcher: isBlack, calc: brandDistributionCount }
-];
+  ];
+}
 
 export function objectiveKeyForQuery(query = {}) {
   const brand = normalizeText(query.marca);
@@ -209,11 +240,11 @@ export function objectiveKeyForQuery(query = {}) {
   return "BD TOTAL NABS";
 }
 
-export function buildObjectivePerformance({ objective, rows, dateSet }) {
+export function buildObjectivePerformance({ objective, rows, dateSet, auxiliaryRules }) {
   if (!objective?.values) return [];
   const elapsedDays = Math.max(dateSet?.size || 0, 1);
   const assumedBusinessDays = 26;
-  return PERFORMANCE_DEFINITIONS.map((definition) => {
+  return performanceDefinitions(auxiliaryRules).map((definition) => {
     const objectiveValue = numberValue(objective.values[definition.key]);
     const matchedRows = (rows || []).filter(definition.matcher);
     const real = definition.calc(matchedRows);
@@ -232,7 +263,7 @@ export function buildObjectivePerformance({ objective, rows, dateSet }) {
   }).filter((row) => row.objetivo > 0);
 }
 
-export function distributeObjective({ objective, objectiveKey, historicalRows, currentRows }) {
+export function distributeObjective({ objective, objectiveKey, historicalRows, currentRows, auxiliaryRules }) {
   if (!objective?.values) return null;
   if (objectiveKey === "BD TOTAL NABS" && objective.sellerHlObjectives?.bySeller?.length) {
     const currentBySeller = new Map();
@@ -271,7 +302,7 @@ export function distributeObjective({ objective, objectiveKey, historicalRows, c
     };
   }
   const totalObjective = numberValue(objective.values[objectiveKey]);
-  const basisRows = (historicalRows || []).filter((row) => rowMatchesObjective(row, objectiveKey));
+  const basisRows = (historicalRows || []).filter((row) => rowMatchesObjective(row, objectiveKey, auxiliaryRules));
   const sellerBasis = new Map();
   for (const row of basisRows) {
     const seller = row.vendedor || "Sin dato";

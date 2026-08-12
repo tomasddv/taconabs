@@ -6,7 +6,7 @@ import multer from "multer";
 import { config } from "./config.js";
 import { downloadDriveFile, uploadFileToDrive } from "./drive.js";
 import { parseVentaDiaria, summarizeVenta } from "./ventaParser.js";
-import { buildObjectivePerformance, distributeObjective, loadComboObjective, loadObjectiveWorkbook, objectiveKeyForQuery } from "./objectives.js";
+import { buildObjectivePerformance, distributeObjective, loadAuxiliaryRules, loadComboObjective, loadObjectiveWorkbook, objectiveKeyForQuery } from "./objectives.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -14,6 +14,7 @@ const upload = multer({ dest: path.join(rootDir, "uploads") });
 const app = express();
 let objectiveCache = null;
 let comboObjectiveCache = undefined;
+let auxiliaryRulesCache = null;
 let historicalCache = null;
 
 app.use(cors());
@@ -29,6 +30,7 @@ app.get("/api/dashboard", async (req, res, next) => {
     const parsed = parseVentaDiaria(buffer);
     const objective = await getObjective();
     const comboObjective = await getComboObjective();
+    const auxiliaryRules = await getAuxiliaryRules();
     const historicalRows = await getHistoricalRows(parsed.rows);
     res.json(
       summarizeVenta(parsed, req.query, {
@@ -37,9 +39,10 @@ app.get("/api/dashboard", async (req, res, next) => {
             objective,
             objectiveKey: objectiveKeyForQuery(query),
             historicalRows,
-            currentRows
+            currentRows,
+            auxiliaryRules
           }),
-        buildObjectivePerformance: ({ rows, dateSet }) => buildObjectivePerformance({ objective, rows, dateSet }),
+        buildObjectivePerformance: ({ rows, dateSet }) => buildObjectivePerformance({ objective, rows, dateSet, auxiliaryRules }),
         comboObjective
       })
     );
@@ -97,6 +100,13 @@ async function getComboObjective() {
     comboObjectiveCache = await loadComboObjective({ localPath: config.seguimientoLocalPath });
   }
   return comboObjectiveCache;
+}
+
+async function getAuxiliaryRules() {
+  if (!auxiliaryRulesCache) {
+    auxiliaryRulesCache = await loadAuxiliaryRules({ driveFileId: config.auxiliaresFileId });
+  }
+  return auxiliaryRulesCache;
 }
 
 async function getHistoricalRows(currentRows) {
