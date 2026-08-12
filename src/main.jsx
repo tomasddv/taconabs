@@ -354,6 +354,29 @@ function App() {
 
         {activeSheet === "seguimiento" ? (
           <section className="wideGrid">
+            <Panel
+              title="Objetivo distribuido por promotor"
+              sub={`${data?.objectiveDistribution?.objectiveKey || "Objetivo"} repartido por HL acumulado de 3 meses.`}
+              icon={FileSpreadsheet}
+            >
+              <section className="inlineMetrics">
+                <Metric title="Objetivo foco" value={number(data?.objectiveDistribution?.totalObjective, 0)} sub={data?.objectiveDistribution?.distributor || "Sin objetivo"} />
+                <Metric title="Base 3 meses" value={`${number(data?.objectiveDistribution?.totalBasisHl)} HL`} sub={data?.objectiveDistribution?.basis || "Histórico no disponible"} />
+              </section>
+              <SimpleTable
+                columns={[
+                  { key: "promotor", label: "Promotor" },
+                  { key: "objetivo", label: "Objetivo", render: (v) => number(v, 0) },
+                  { key: "real", label: "Real", render: (v) => number(v, 0) },
+                  { key: "avance", label: "Avance", render: (v) => percent(v) },
+                  { key: "faltante", label: "Faltante", render: (v) => number(v, 0) },
+                  { key: "pesoHistorico", label: "Peso 3m", render: (v) => percent(v) },
+                  { key: "baseHl3m", label: "HL 3m", render: (v) => number(v) }
+                ]}
+                rows={data?.objectiveDistribution?.bySeller || []}
+                limit={24}
+              />
+            </Panel>
             <Panel title="Ranking por volumen HL" sub="Promotores ordenados por HL acumulados." icon={BarChart3}>
               <SimpleTable columns={sellerColumns} rows={data?.bySeller || []} limit={24} />
             </Panel>

@@ -6,11 +6,14 @@ import multer from "multer";
 import { config } from "./config.js";
 import { downloadDriveFile, uploadFileToDrive } from "./drive.js";
 import { parseVentaDiaria, summarizeVenta } from "./ventaParser.js";
+import { distributeObjective, loadObjectiveWorkbook, objectiveKeyForQuery } from "./objectives.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const upload = multer({ dest: path.join(rootDir, "uploads") });
 const app = express();
+let objectiveCache = null;
+let historicalCache = null;
 
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
@@ -23,7 +26,19 @@ app.get("/api/dashboard", async (req, res, next) => {
   try {
     const buffer = await downloadDriveFile(config.ventaDiariaFileId);
     const parsed = parseVentaDiaria(buffer);
-    res.json(summarizeVenta(parsed, req.query));
+    const objective = await getObjective();
+    const historicalRows = await getHistoricalRows(parsed.rows);
+    res.json(
+      summarizeVenta(parsed, req.query, {
+        distributeObjective: ({ currentRows, query }) =>
+          distributeObjective({
+            objective,
+            objectiveKey: objectiveKeyForQuery(query),
+            historicalRows,
+            currentRows
+          })
+      })
+    );
   } catch (error) {
     next(error);
   }
@@ -61,6 +76,29 @@ app.use((error, _req, res, _next) => {
   console.error(error);
   res.status(500).json({ error: error.message || "Error interno" });
 });
+
+async function getObjective() {
+  if (!objectiveCache) {
+    objectiveCache = await loadObjectiveWorkbook({
+      localPath: config.objetivoLocalPath,
+      driveFileId: config.objetivoFileId,
+      rootDir
+    });
+  }
+  return objectiveCache;
+}
+
+async function getHistoricalRows(currentRows) {
+  if (!historicalCache) {
+    const parsedFiles = [];
+    for (const fileId of config.historicalVentaFileIds) {
+      const buffer = await downloadDriveFile(fileId);
+      parsedFiles.push(...parseVentaDiaria(buffer).rows);
+    }
+    historicalCache = parsedFiles;
+  }
+  return [...historicalCache, ...(currentRows || [])];
+}
 
 app.listen(config.port, () => {
   console.log(`API lista en http://127.0.0.1:${config.port}`);

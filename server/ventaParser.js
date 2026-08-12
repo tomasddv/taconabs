@@ -573,7 +573,7 @@ function withoutDateRange(query) {
   return rest;
 }
 
-export function summarizeVenta(parsed, query = {}) {
+export function summarizeVenta(parsed, query = {}, context = {}) {
   const allRows = parsed.rows || parsed;
   const allowedRows = allRows.filter(isAllowedProduct);
   const rows = applyFilters(allowedRows, query);
@@ -601,6 +601,9 @@ export function summarizeVenta(parsed, query = {}) {
     String(a.fechaISO).localeCompare(String(b.fechaISO))
   );
   const customerPurchaseBySeller = customerActivationsBySeller(monthlyActivationRows, rows);
+  const objectiveDistribution = context.distributeObjective
+    ? context.distributeObjective({ currentRows: rows, query })
+    : null;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -643,6 +646,7 @@ export function summarizeVenta(parsed, query = {}) {
       dailyTrend: customerPurchaseTrend,
       detail: customerPurchaseDetail
     },
+    objectiveDistribution,
     marketplace: {
       gmvTotal: sum(byMarketplace, "importeNeto"),
       gmvByCategory: groupBy(byMarketplace, "foco"),
@@ -659,11 +663,13 @@ export function summarizeVenta(parsed, query = {}) {
     filters: filterOptions(allowedRows),
     quality: dataQuality(allowedRows, parsed.headers || [], parsed.headerIssues || []),
     unavailable: [
-      "Objetivo mensual, avance contra objetivo y faltante requieren el Excel mensual de focos/objetivos con metas normalizadas.",
+      objectiveDistribution
+        ? null
+        : "Objetivo mensual, avance contra objetivo y faltante requieren el Excel mensual de focos/objetivos con metas normalizadas.",
       "Clientes sin compra y % cobertura contra cartera requieren una base de universo/cartera.",
       "Supervisor requiere mapeo vendedor-supervisor si no viene en ventadiaria.",
-      "Combos solo se calculan si ventadiaria trae Cantidades en Combos mayor a cero.",
+      "Combos se detectan por columna Cantidades en Combos o por articulo/producto que contenga COMBO.",
       "Marketplace solo se calcula si las filas contienen Marketplace/Mktplace en negocio o producto."
-    ]
+    ].filter(Boolean)
   };
 }
