@@ -103,6 +103,7 @@ function normalizeText(value) {
 
 function classifyBusiness(row) {
   const brand = normalizeText(row.marca);
+  if (isGatoradeCombo(row)) return "UNG";
   if (ALLOWED_BRANDS.Match.has(brand)) return "Match";
   if (ALLOWED_BRANDS.Marketplace.has(brand)) return "Marketplace";
   if (ALLOWED_BRANDS.Aguas.has(brand)) return "Aguas";
@@ -110,10 +111,25 @@ function classifyBusiness(row) {
   return "Excluido";
 }
 
+function isGatoradeCombo(row) {
+  const text = normalizeText(`${row.marca} ${row.articulo} ${row.productoEstadistico}`);
+  return isComboProduct(row) && (text.includes("GATORADE") || text.includes("GTD"));
+}
+
+function isComboProduct(row) {
+  const text = normalizeText(`${row.articulo} ${row.productoEstadistico}`);
+  return Number(row.combos || 0) > 0 || text.includes("COMBO");
+}
+
+function matchesBrand(row, value) {
+  if (row.marca === value) return true;
+  return value === "GATORADE" && isGatoradeCombo(row);
+}
+
 function classifyFocus(row) {
   const text = normalizeText(`${row.marca} ${row.calibre} ${row.productoEstadistico}`);
   if (text.includes("RED BULL")) return "Red Bull";
-  if (text.includes("GATORADE")) return "Gatorade";
+  if (text.includes("GATORADE") || isGatoradeCombo(row)) return "Gatorade";
   if (text.includes("BLACK") || text.includes("FREE") || text.includes("NON SUGAR")) return "Non Sugar";
   if (text.includes("AGUA") || text.includes("H2OH") || text.includes("GLACIAR") || text.includes("NESTLE")) return "Aguas";
   if (text.includes("PEPSI") || text.includes("7 UP") || text.includes("MIRINDA")) return "Familiares";
@@ -177,6 +193,12 @@ export function parseVentaDiaria(buffer) {
         facturas: numberFromAr(pick(source, FIELD_ALIASES.facturas)),
         combos: numberFromAr(pick(source, FIELD_ALIASES.combos))
       };
+      parsedRow.esCombo = isComboProduct(parsedRow);
+      if (isGatoradeCombo(parsedRow)) {
+        parsedRow.marca = parsedRow.marca || "GATORADE";
+        parsedRow.calibre = parsedRow.calibre || "Combo";
+        parsedRow.productoEstadistico = parsedRow.productoEstadistico || "Combo Gatorade";
+      }
       parsedRow.negocio = classifyBusiness(parsedRow);
       parsedRow.foco = classifyFocus(parsedRow);
       parsedRow.fechaISO = parseDateKey(parsedRow.fecha)?.toISOString().slice(0, 10) || "";
@@ -211,7 +233,8 @@ function groupBy(rows, key, sortMetric = "hl") {
       importeNeto: 0,
       importeFinal: 0,
       facturas: 0,
-      combos: 0
+      combos: 0,
+      comboProductos: 0
     };
     current.rows += 1;
     current.clientesSet.add(row.clienteCodigo || row.cliente);
@@ -221,6 +244,7 @@ function groupBy(rows, key, sortMetric = "hl") {
     current.importeFinal += row.importeFinal;
     current.facturas += row.facturas;
     current.combos += row.combos;
+    if (row.esCombo) current.comboProductos += 1;
     grouped.set(label, current);
   }
   return [...grouped.values()]
@@ -233,7 +257,8 @@ function groupBy(rows, key, sortMetric = "hl") {
       importeNeto: item.importeNeto,
       importeFinal: item.importeFinal,
       facturas: item.facturas,
-      combos: item.combos
+      combos: item.combos,
+      comboProductos: item.comboProductos
     }))
     .sort((a, b) => (b[sortMetric] || 0) - (a[sortMetric] || 0));
 }
@@ -256,7 +281,9 @@ function brandDistributionBySellerBrandCaliber(rows) {
       hl: 0,
       importeNeto: 0,
       importeFinal: 0,
-      facturas: 0
+      facturas: 0,
+      combos: 0,
+      comboProductos: 0
     };
     current.rows += 1;
     current.clientesSet.add(row.clienteCodigo || row.cliente);
@@ -265,6 +292,8 @@ function brandDistributionBySellerBrandCaliber(rows) {
     current.importeNeto += row.importeNeto;
     current.importeFinal += row.importeFinal;
     current.facturas += row.facturas;
+    current.combos += row.combos;
+    if (row.esCombo) current.comboProductos += 1;
     grouped.set(key, current);
   }
   return [...grouped.values()]
@@ -279,6 +308,8 @@ function brandDistributionBySellerBrandCaliber(rows) {
       importeNeto: item.importeNeto,
       importeFinal: item.importeFinal,
       facturas: item.facturas,
+      combos: item.combos,
+      comboProductos: item.comboProductos,
       rows: item.rows
     }))
     .sort((a, b) => a.promotor.localeCompare(b.promotor) || a.marca.localeCompare(b.marca) || b.clientes - a.clientes);
@@ -304,6 +335,8 @@ function customerPurchasesByDay(rows) {
       importeNeto: 0,
       importeFinal: 0,
       facturas: 0,
+      combos: 0,
+      comboProductos: 0,
       rows: 0
     };
     current.promotoresSet.add(row.vendedor);
@@ -314,6 +347,8 @@ function customerPurchasesByDay(rows) {
     current.importeNeto += row.importeNeto;
     current.importeFinal += row.importeFinal;
     current.facturas += row.facturas;
+    current.combos += row.combos;
+    if (row.esCombo) current.comboProductos += 1;
     current.rows += 1;
     grouped.set(key, current);
   }
@@ -332,6 +367,8 @@ function customerPurchasesByDay(rows) {
       importeNeto: item.importeNeto,
       importeFinal: item.importeFinal,
       facturas: item.facturas,
+      combos: item.combos,
+      comboProductos: item.comboProductos,
       rows: item.rows
     }))
     .sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)) || a.cliente.localeCompare(b.cliente));
@@ -496,6 +533,7 @@ function filterOptions(rows) {
     marca: optionFor("marca"),
     calibre: optionFor("calibre"),
     sku: optionFor("articulo"),
+    combo: ["Con combo", "Sin combo"],
     canal: optionFor("ramo"),
     cliente: optionFor("cliente")
   };
@@ -510,9 +548,10 @@ export function applyFilters(rows, query = {}) {
     promotor: (row, value) => row.vendedor === value,
     negocio: (row, value) => row.negocio === value,
     grupoProducto: (row, value) => row.productoEstadistico === value,
-    marca: (row, value) => row.marca === value,
+    marca: (row, value) => matchesBrand(row, value),
     calibre: (row, value) => row.calibre === value,
     sku: (row, value) => row.articulo === value,
+    combo: (row, value) => (value === "Con combo" ? row.esCombo : !row.esCombo),
     canal: (row, value) => row.ramo === value,
     cliente: (row, value) => row.cliente === value
   };
@@ -556,7 +595,7 @@ export function summarizeVenta(parsed, query = {}) {
   const byFocus = groupBy(rows, "foco");
   const byProduct = groupBy(rows, "productoEstadistico");
   const byMarketplace = rows.filter((row) => row.negocio === "Marketplace");
-  const byCombo = rows.filter((row) => row.combos > 0);
+  const byCombo = rows.filter((row) => row.esCombo);
   const customerPurchaseDetail = customerPurchasesByDay(rows);
   const customerPurchaseTrend = [...dailyCustomerActivations(rows).values()].sort((a, b) =>
     String(a.fechaISO).localeCompare(String(b.fechaISO))

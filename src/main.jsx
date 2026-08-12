@@ -127,6 +127,7 @@ function Filters({ data, filters, setFilters, refresh, loading }) {
         <SelectFilter label="Marca" value={filters.marca} options={options.marca} onChange={(v) => update("marca", v)} />
         <SelectFilter label="Calibre" value={filters.calibre} options={options.calibre} onChange={(v) => update("calibre", v)} />
         <SelectFilter label="SKU" value={filters.sku} options={options.sku} onChange={(v) => update("sku", v)} />
+        <SelectFilter label="Combo" value={filters.combo} options={options.combo} onChange={(v) => update("combo", v)} />
         <SelectFilter label="Canal" value={filters.canal} options={options.canal} onChange={(v) => update("canal", v)} />
         <SelectFilter label="Cliente" value={filters.cliente} options={options.cliente} onChange={(v) => update("cliente", v)} />
       </div>
@@ -460,7 +461,9 @@ function App() {
                         "skus",
                         "hl",
                         "importeNeto",
-                        "facturas"
+                        "facturas",
+                        "comboProductos",
+                        "combos"
                       ])
                     }
                   >
@@ -478,7 +481,9 @@ function App() {
                     { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
                     { key: "hl", label: "HL", render: (v) => number(v) },
                     { key: "importeNeto", label: "Importe", render: (v) => money(v) },
-                    { key: "facturas", label: "Facturas", render: (v) => number(v, 0) }
+                    { key: "facturas", label: "Facturas", render: (v) => number(v, 0) },
+                    { key: "comboProductos", label: "Líneas combo", render: (v) => number(v, 0) },
+                    { key: "combos", label: "Cant. combo", render: (v) => number(v, 0) }
                   ]}
                   rows={data?.customerPurchases?.detail || []}
                   limit={60}
