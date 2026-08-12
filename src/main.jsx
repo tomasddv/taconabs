@@ -251,7 +251,10 @@ function App() {
     try {
       const params = new URLSearchParams(Object.entries(currentFilters).filter(([, value]) => value));
       const response = await fetch(`${API_URL}/api/dashboard?${params.toString()}`);
-      const payload = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json")
+        ? await response.json()
+        : { error: await response.text() };
       if (!response.ok) throw new Error(payload.error);
       setData(payload);
     } catch (err) {

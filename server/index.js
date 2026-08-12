@@ -125,6 +125,9 @@ async function getAuxiliaryRules() {
 }
 
 async function getHistoricalRows(currentRows) {
+  if (!config.historicalVentaFileIds.length) {
+    return currentRows || [];
+  }
   if (!historicalCache) {
     const parsedFiles = [];
     for (const fileId of config.historicalVentaFileIds) {

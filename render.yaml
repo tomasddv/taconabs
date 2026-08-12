@@ -6,3 +6,6 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm start
     autoDeploy: true
+    envVars:
+      - key: HISTORICAL_VENTA_FILE_IDS
+        value: ""
