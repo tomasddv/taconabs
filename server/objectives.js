@@ -45,13 +45,16 @@ function parseSellerHlObjectives(buffer) {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: null });
   const headerIndex = rows.findIndex((row) => normalizeText(row[0]) === "SELECCION" && normalizeText(row[1]) === "DESCRIPCION");
-  const totalRow = rows.find((row) => normalizeText(row[1]) === "TOTAL");
-  if (headerIndex === -1 || !totalRow) return null;
+  const objectiveRow = rows.find((row) => {
+    const description = normalizeText(row[1]);
+    return description.includes("7-UP") || description.includes("7 UP") || description.includes("7UP");
+  });
+  if (headerIndex === -1 || !objectiveRow) return null;
 
   const bySeller = [];
   for (let column = 2; column < rows[headerIndex].length; column += 1) {
     const label = rows[headerIndex][column];
-    const value = numberValue(totalRow[column]);
+    const value = numberValue(objectiveRow[column]);
     const match = String(label || "").match(/^\d+-(.+)$/);
     if (!match || !value) continue;
     const seller = normalizeText(match[1]) === "SIN VENDEDOR ASIGNADO" ? "Sin dato" : normalizeText(match[1]);
@@ -60,6 +63,7 @@ function parseSellerHlObjectives(buffer) {
   const total = bySeller.reduce((sum, row) => sum + row.objetivo, 0);
   return {
     source: "OBJETIVO.xlsx",
+    product: objectiveRow[1],
     total,
     bySeller
   };
@@ -201,7 +205,7 @@ export function distributeObjective({ objective, objectiveKey, historicalRows, c
       brandDistributionObjective: numberValue(objective.values[objectiveKey]) || null,
       sellerObjectiveTotal: objective.sellerHlObjectives.total,
       totalBasisHl: null,
-      basis: "Objetivo HL directo por vendedor desde OBJETIVO.xlsx en Drive",
+      basis: `Objetivo HL desde fila ${objective.sellerHlObjectives.product || "7-UP"} de OBJETIVO.xlsx en Drive`,
       metric: "HL",
       bySeller
     };
