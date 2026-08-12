@@ -197,9 +197,10 @@ export function distributeObjective({ objective, objectiveKey, historicalRows, c
       region: objective.region,
       leader: objective.leader,
       objectiveKey,
-      totalObjective: objective.sellerHlObjectives.total,
+      totalObjective: numberValue(objective.values[objectiveKey]) || objective.sellerHlObjectives.total,
+      sellerObjectiveTotal: objective.sellerHlObjectives.total,
       totalBasisHl: null,
-      basis: "Objetivo HL directo por vendedor desde OBJETIVO.xlsx en Drive",
+      basis: "Total NABS desde Excel mensual; apertura por vendedor desde OBJETIVO.xlsx en Drive",
       metric: "HL",
       bySeller
     };

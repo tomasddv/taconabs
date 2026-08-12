@@ -687,7 +687,7 @@ export function summarizeVenta(parsed, query = {}, context = {}) {
       excludedRows: allRows.length - allowedRows.length
     },
     totals,
-    executive: makeExecutive(totals, dateSet),
+    executive: makeExecutive(totals, dateSet, objectiveDistribution?.totalObjective || null),
     byDay: groupBy(rows, "fecha").sort((a, b) => String(a.label).localeCompare(String(b.label))),
     bySeller,
     bySellerCcc,
