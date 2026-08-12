@@ -454,12 +454,17 @@ function App() {
             </Panel>
             <Panel title="Brand Distribution por promotor" sub="Total por promotor, marca y calibre." icon={BarChart3}>
               <section className="inlineMetrics">
-                <Metric title="Negocio por promotor" value={number(data?.brandDistribution?.byPromotorNegocio?.length, 0)} sub="Filas promotor / negocio" />
+                <Metric
+                  title="SKUs activados"
+                  value={number((data?.brandDistribution?.byPromotorNegocio || []).reduce((total, row) => total + (row.skus || 0), 0), 0)}
+                  sub="Suma por promotor / negocio"
+                />
               </section>
               <SimpleTable
                 columns={[
                   { key: "promotor", label: "Promotor" },
                   { key: "negocio", label: "Negocio" },
+                  { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
                   { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
                   { key: "hl", label: "HL", render: (v) => number(v) },
                   { key: "importeNeto", label: "Importe", render: (v) => money(v) }

@@ -326,11 +326,13 @@ function groupBySellerBusiness(rows) {
       promotor: seller,
       negocio: business,
       clientesSet: new Set(),
+      skuSet: new Set(),
       hl: 0,
       importeNeto: 0,
       facturas: 0
     };
     current.clientesSet.add(row.clienteCodigo || row.cliente);
+    current.skuSet.add(row.articuloCodigo || row.articulo);
     current.hl += row.hl;
     current.importeNeto += row.importeNeto;
     current.facturas += row.facturas;
@@ -341,12 +343,13 @@ function groupBySellerBusiness(rows) {
       label: item.label,
       promotor: item.promotor,
       negocio: item.negocio,
+      skus: item.skuSet.size,
       clientes: item.clientesSet.size,
       hl: item.hl,
       importeNeto: item.importeNeto,
       facturas: item.facturas
     }))
-    .sort((a, b) => a.promotor.localeCompare(b.promotor) || b.hl - a.hl);
+    .sort((a, b) => b.skus - a.skus || a.promotor.localeCompare(b.promotor) || b.hl - a.hl);
 }
 
 function comboCccByName(rows) {
