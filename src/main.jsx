@@ -272,6 +272,12 @@ function App() {
     return () => window.clearTimeout(timeout);
   }, [filters]);
 
+  useEffect(() => {
+    if (activeSheet === "objetivos" && !data?.objectivePerformance?.length) {
+      load(filters);
+    }
+  }, [activeSheet]);
+
   const byDay = useMemo(() => data?.byDay || [], [data]);
   const detailRows = useMemo(() => {
     const term = detailSearch.toLowerCase();
