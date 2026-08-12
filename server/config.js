@@ -8,6 +8,7 @@ export const config = {
   ventaDiariaFileId: process.env.VENTADIARIA_FILE_ID || "12c7hy-bTbg7P_1QYUyKKcooNLo4iog1x",
   objetivoFileId: process.env.OBJETIVO_FILE_ID || "1qw127SPBgHR9Spi-0SA8TKLRBhpJ_Xg7",
   objetivoLocalPath: process.env.OBJETIVO_LOCAL_PATH || "uploads/objetivos-agosto-202608.xlsx",
+  seguimientoLocalPath: process.env.SEGUIMIENTO_LOCAL_PATH || "C:/Users/triesgo/Downloads/SEGUIMIENTO AGOSTO!.xlsx",
   historicalVentaFileIds: (process.env.HISTORICAL_VENTA_FILE_IDS || "1t3Qck9PMkvq4qp6XNynVUAGV1REP8NqD,1nMCKcAXe7n_ROsJtbtgSuqik5pR4VdCW")
     .split(",")
     .map((item) => item.trim())

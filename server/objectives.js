@@ -41,9 +41,42 @@ function rowsFromWorkbook(buffer) {
   return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
 }
 
+function parseSellerHlObjectives(buffer) {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: null });
+  const headerIndex = rows.findIndex((row) => normalizeText(row[0]) === "SELECCION" && normalizeText(row[1]) === "DESCRIPCION");
+  const totalRow = rows.find((row) => normalizeText(row[1]) === "TOTAL");
+  if (headerIndex === -1 || !totalRow) return null;
+
+  const bySeller = [];
+  for (let column = 2; column < rows[headerIndex].length; column += 1) {
+    const label = rows[headerIndex][column];
+    const value = numberValue(totalRow[column]);
+    const match = String(label || "").match(/^\d+-(.+)$/);
+    if (!match || !value) continue;
+    const seller = normalizeText(match[1]) === "SIN VENDEDOR ASIGNADO" ? "Sin dato" : normalizeText(match[1]);
+    bySeller.push({ promotor: seller, objetivo: value });
+  }
+  const total = bySeller.reduce((sum, row) => sum + row.objetivo, 0);
+  return {
+    source: "OBJETIVO.xlsx",
+    total,
+    bySeller
+  };
+}
+
 export async function loadObjectiveWorkbook({ localPath, driveFileId, rootDir }) {
   let buffer = null;
   let source = null;
+  let sellerHlObjectives = null;
+  if (driveFileId) {
+    try {
+      const driveBuffer = await downloadDriveFile(driveFileId);
+      sellerHlObjectives = parseSellerHlObjectives(driveBuffer);
+    } catch {
+      sellerHlObjectives = null;
+    }
+  }
   const resolvedLocalPath = localPath ? path.resolve(rootDir, localPath) : null;
   if (resolvedLocalPath) {
     try {
@@ -78,8 +111,25 @@ export async function loadObjectiveWorkbook({ localPath, driveFileId, rootDir })
     distributor: LOCAL_DISTRIBUTOR,
     region: localRow[headers.findIndex((header) => normalizeText(header) === "REGION")] || null,
     leader: localRow[headers.findIndex((header) => normalizeText(header) === "LIDER")] || null,
+    sellerHlObjectives,
     values
   };
+}
+
+export async function loadComboObjective({ localPath }) {
+  if (!localPath) return null;
+  try {
+    const buffer = await fs.readFile(path.resolve(localPath));
+    const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    const sheet = workbook.Sheets["Tab.gral"];
+    if (!sheet) return null;
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    const row = rows.find((item) => normalizeText(item[1]) === "COBERTURA COMBOS FOCOS");
+    const objective = numberValue(row?.[3]);
+    return objective || null;
+  } catch {
+    return null;
+  }
 }
 
 function isEnergy(row) {
@@ -120,6 +170,40 @@ export function objectiveKeyForQuery(query = {}) {
 
 export function distributeObjective({ objective, objectiveKey, historicalRows, currentRows }) {
   if (!objective?.values) return null;
+  if (objectiveKey === "BD TOTAL NABS" && objective.sellerHlObjectives?.bySeller?.length) {
+    const currentBySeller = new Map();
+    for (const row of currentRows || []) {
+      const seller = row.vendedor || "Sin dato";
+      currentBySeller.set(seller, (currentBySeller.get(seller) || 0) + Number(row.hl || 0));
+    }
+    const bySeller = objective.sellerHlObjectives.bySeller
+      .map((row) => {
+        const real = currentBySeller.get(row.promotor) || 0;
+        return {
+          label: row.promotor,
+          promotor: row.promotor,
+          objetivo: row.objetivo,
+          real,
+          faltante: Math.max(row.objetivo - real, 0),
+          avance: row.objetivo ? real / row.objetivo : null,
+          pesoHistorico: objective.sellerHlObjectives.total ? row.objetivo / objective.sellerHlObjectives.total : 0,
+          baseHl3m: null
+        };
+      })
+      .sort((a, b) => b.objetivo - a.objetivo);
+    return {
+      source: objective.sellerHlObjectives.source,
+      distributor: objective.distributor,
+      region: objective.region,
+      leader: objective.leader,
+      objectiveKey,
+      totalObjective: objective.sellerHlObjectives.total,
+      totalBasisHl: null,
+      basis: "Objetivo HL directo por vendedor desde OBJETIVO.xlsx en Drive",
+      metric: "HL",
+      bySeller
+    };
+  }
   const totalObjective = numberValue(objective.values[objectiveKey]);
   const basisRows = (historicalRows || []).filter((row) => rowMatchesObjective(row, objectiveKey));
   const sellerBasis = new Map();
@@ -168,6 +252,7 @@ export function distributeObjective({ objective, objectiveKey, historicalRows, c
     totalObjective,
     totalBasisHl: totalBasis,
     basis: "HL acumulado de junio, julio y venta diaria actual disponible",
+    metric: "CCC",
     bySeller
   };
 }

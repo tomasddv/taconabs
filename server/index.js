@@ -6,13 +6,14 @@ import multer from "multer";
 import { config } from "./config.js";
 import { downloadDriveFile, uploadFileToDrive } from "./drive.js";
 import { parseVentaDiaria, summarizeVenta } from "./ventaParser.js";
-import { distributeObjective, loadObjectiveWorkbook, objectiveKeyForQuery } from "./objectives.js";
+import { distributeObjective, loadComboObjective, loadObjectiveWorkbook, objectiveKeyForQuery } from "./objectives.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const upload = multer({ dest: path.join(rootDir, "uploads") });
 const app = express();
 let objectiveCache = null;
+let comboObjectiveCache = undefined;
 let historicalCache = null;
 
 app.use(cors());
@@ -27,6 +28,7 @@ app.get("/api/dashboard", async (req, res, next) => {
     const buffer = await downloadDriveFile(config.ventaDiariaFileId);
     const parsed = parseVentaDiaria(buffer);
     const objective = await getObjective();
+    const comboObjective = await getComboObjective();
     const historicalRows = await getHistoricalRows(parsed.rows);
     res.json(
       summarizeVenta(parsed, req.query, {
@@ -36,7 +38,8 @@ app.get("/api/dashboard", async (req, res, next) => {
             objectiveKey: objectiveKeyForQuery(query),
             historicalRows,
             currentRows
-          })
+          }),
+        comboObjective
       })
     );
   } catch (error) {
@@ -86,6 +89,13 @@ async function getObjective() {
     });
   }
   return objectiveCache;
+}
+
+async function getComboObjective() {
+  if (comboObjectiveCache === undefined) {
+    comboObjectiveCache = await loadComboObjective({ localPath: config.seguimientoLocalPath });
+  }
+  return comboObjectiveCache;
 }
 
 async function getHistoricalRows(currentRows) {

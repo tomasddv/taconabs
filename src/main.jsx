@@ -289,6 +289,26 @@ function App() {
     { key: "importeNeto", label: "Importe", render: (v) => money(v) },
     { key: "facturas", label: "Facturas", render: (v) => number(v, 0) }
   ];
+  const brandColumns = [
+    { key: "label", label: "Marca" },
+    { key: "hl", label: "HL", render: (v) => number(v) },
+    { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
+    { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
+    { key: "importeNeto", label: "Importe", render: (v) => money(v) }
+  ];
+  const caliberColumns = [
+    { key: "label", label: "Calibre" },
+    { key: "hl", label: "HL", render: (v) => number(v) },
+    { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
+    { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
+    { key: "importeNeto", label: "Importe", render: (v) => money(v) }
+  ];
+  const coverageColumns = [
+    { key: "label", label: "Promotor" },
+    { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
+    { key: "hl", label: "HL", render: (v) => number(v) },
+    { key: "importeNeto", label: "Importe", render: (v) => money(v) }
+  ];
 
   return (
     <main>
@@ -361,13 +381,13 @@ function App() {
             >
               <section className="inlineMetrics">
                 <Metric title="Objetivo foco" value={number(data?.objectiveDistribution?.totalObjective, 0)} sub={data?.objectiveDistribution?.distributor || "Sin objetivo"} />
-                <Metric title="Base 3 meses" value={`${number(data?.objectiveDistribution?.totalBasisHl)} HL`} sub={data?.objectiveDistribution?.basis || "Histórico no disponible"} />
+                <Metric title="Base objetivo" value={data?.objectiveDistribution?.totalBasisHl === null ? "Drive" : `${number(data?.objectiveDistribution?.totalBasisHl)} HL`} sub={data?.objectiveDistribution?.basis || "Histórico no disponible"} />
               </section>
               <SimpleTable
                 columns={[
                   { key: "promotor", label: "Promotor" },
                   { key: "objetivo", label: "Objetivo", render: (v) => number(v, 0) },
-                  { key: "real", label: "Real", render: (v) => number(v, 0) },
+                  { key: "real", label: `Real ${data?.objectiveDistribution?.metric || ""}`, render: (v) => number(v) },
                   { key: "avance", label: "Avance", render: (v) => percent(v) },
                   { key: "faltante", label: "Faltante", render: (v) => number(v, 0) },
                   { key: "pesoHistorico", label: "Peso 3m", render: (v) => percent(v) },
@@ -400,23 +420,31 @@ function App() {
               </ResponsiveContainer>
             </Panel>
             <Panel title="Marca y calibre" sub="Pepsi, 7Up, Mirinda, Gatorade, H2Oh, Red Bull y calibres." icon={Database}>
-              <SimpleTable columns={sellerColumns} rows={data?.byBrand || []} limit={14} />
+              <SimpleTable columns={brandColumns} rows={data?.byBrand || []} limit={14} />
               <div className="spacer" />
-              <SimpleTable columns={sellerColumns} rows={data?.byCaliber || []} limit={14} />
+              <SimpleTable columns={caliberColumns} rows={data?.byCaliber || []} limit={14} />
             </Panel>
           </section>
         ) : null}
 
         {activeSheet === "coberturas" ? (
-          <Panel title="Coberturas / CCC" sub="CCC UNG, aguas, Red Bull, marketplace y por grupo producto." icon={CheckCircle2}>
-            <div className="threeGrid">
-              <SimpleTable columns={sellerColumns} rows={data?.coverage?.cccTotalUng || []} limit={10} />
-              <SimpleTable columns={sellerColumns} rows={data?.coverage?.cccAguas || []} limit={10} />
-              <SimpleTable columns={sellerColumns} rows={data?.coverage?.cccRedBull || []} limit={10} />
-            </div>
-            <div className="spacer" />
-            <SimpleTable columns={sellerColumns} rows={data?.coverage?.byProduct || []} limit={18} />
-          </Panel>
+          <section className="wideGrid">
+            <Panel title="CCC UNG" sub="Clientes con compra UNG por promotor." icon={CheckCircle2}>
+              <SimpleTable columns={coverageColumns} rows={data?.coverage?.cccTotalUng || []} limit={18} />
+            </Panel>
+            <Panel title="CCC Aguas" sub="Clientes con compra de aguas por promotor." icon={CheckCircle2}>
+              <SimpleTable columns={coverageColumns} rows={data?.coverage?.cccAguas || []} limit={18} />
+            </Panel>
+            <Panel title="CCC Red Bull" sub="Clientes con compra Red Bull por promotor." icon={CheckCircle2}>
+              <SimpleTable columns={coverageColumns} rows={data?.coverage?.cccRedBull || []} limit={18} />
+            </Panel>
+            <Panel title="CCC Marketplace" sub="Clientes con compra marketplace por promotor." icon={CheckCircle2}>
+              <SimpleTable columns={coverageColumns} rows={data?.coverage?.cccMarketplace || []} limit={18} />
+            </Panel>
+            <Panel title="CCC por grupo producto" sub="Cobertura agrupada por producto estadístico." icon={Database}>
+              <SimpleTable columns={[{ key: "label", label: "Grupo producto" }, { key: "clientes", label: "CCC", render: (v) => number(v, 0) }, { key: "hl", label: "HL", render: (v) => number(v) }, { key: "importeNeto", label: "Importe", render: (v) => money(v) }]} rows={data?.coverage?.byProduct || []} limit={28} />
+            </Panel>
+          </section>
         ) : null}
 
         {activeSheet === "brand" ? (
@@ -425,6 +453,21 @@ function App() {
               <SimpleTable columns={[{ key: "label", label: "Cliente" }, { key: "skus", label: "SKUs", render: (v) => number(v, 0) }, { key: "clientes", label: "Clientes", render: (v) => number(v, 0) }, { key: "hl", label: "HL", render: (v) => number(v) }]} rows={data?.brandDistribution?.skusByClient || []} limit={24} />
             </Panel>
             <Panel title="Brand Distribution por promotor" sub="Total por promotor, marca y calibre." icon={BarChart3}>
+              <section className="inlineMetrics">
+                <Metric title="Negocio por promotor" value={number(data?.brandDistribution?.byPromotorNegocio?.length, 0)} sub="Filas promotor / negocio" />
+              </section>
+              <SimpleTable
+                columns={[
+                  { key: "promotor", label: "Promotor" },
+                  { key: "negocio", label: "Negocio" },
+                  { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
+                  { key: "hl", label: "HL", render: (v) => number(v) },
+                  { key: "importeNeto", label: "Importe", render: (v) => money(v) }
+                ]}
+                rows={data?.brandDistribution?.byPromotorNegocio || []}
+                limit={30}
+              />
+              <div className="spacer" />
               <SimpleTable
                 columns={[
                   { key: "promotor", label: "Promotor" },
@@ -529,9 +572,22 @@ function App() {
         {activeSheet === "combos" ? (
           <Panel title="Combos y focos" sub="Clientes combo, combo por tipo, ranking vendedor y acciones pendientes." icon={CheckCircle2}>
             <section className="inlineMetrics">
-              <Metric title="Clientes combo" value={number(data?.combosFocus?.comboClients, 0)} sub="Cantidades en Combos" />
-              <Metric title="Activaciones pendientes" value={number(data?.combosFocus?.pendingActivations?.length, 0)} sub="Desde Excel mensual" />
+              <Metric title="Clientes combo" value={number(data?.combosFocus?.comboClients, 0)} sub="Artículo/producto combo" />
+              <Metric title="Objetivo combos" value={data?.combosFocus?.comboObjective ? number(data.combosFocus.comboObjective, 0) : "Sin objetivo"} sub="Desde seguimiento mensual" />
+              <Metric title="Tipos de combo" value={number(data?.combosFocus?.byComboCcc?.length, 0)} sub="Una fila por combo" />
             </section>
+            <SimpleTable
+              columns={[
+                { key: "combo", label: "Combo" },
+                { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
+                { key: "promotores", label: "Promotores", render: (v) => number(v, 0) },
+                { key: "importeNeto", label: "Importe", render: (v) => money(v) },
+                { key: "rows", label: "Líneas", render: (v) => number(v, 0) }
+              ]}
+              rows={data?.combosFocus?.byComboCcc || []}
+              limit={30}
+            />
+            <div className="spacer" />
             <SimpleTable columns={sellerColumns} rows={data?.combosFocus?.bySeller || []} limit={18} />
           </Panel>
         ) : null}
