@@ -42,7 +42,7 @@ function rowsFromWorkbook(buffer) {
 }
 
 export async function loadAuxiliaryRules({ driveFileId }) {
-  if (!driveFileId) return { familiarPairs: new Set() };
+  if (!driveFileId) return { familiarPairs: new Set(), topPairs: new Set() };
   try {
     const buffer = await downloadDriveFile(driveFileId);
     const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
@@ -52,15 +52,18 @@ export async function loadAuxiliaryRules({ driveFileId }) {
     const brandIndex = headers.findLastIndex((header, index) => index < cprIndex && normalizeText(header) === "MARCA");
     const caliberIndex = headers.findLastIndex((header, index) => index < cprIndex && normalizeText(header) === "CALIBRE");
     const familiarPairs = new Set();
+    const topPairs = new Set();
     for (const row of rows.slice(1)) {
-      if (normalizeText(row[cprIndex]) !== "FAMILIARES") continue;
+      const category = normalizeText(row[cprIndex]);
       const brand = normalizeText(row[brandIndex]);
       const caliber = normalizeText(row[caliberIndex]);
-      if (brand && caliber) familiarPairs.add(`${brand}|${caliber}`);
+      if (!brand || !caliber) continue;
+      if (category === "FAMILIARES") familiarPairs.add(`${brand}|${caliber}`);
+      if (category === "TOP") topPairs.add(`${brand}|${caliber}`);
     }
-    return { familiarPairs };
+    return { familiarPairs, topPairs };
   } catch {
-    return { familiarPairs: new Set() };
+    return { familiarPairs: new Set(), topPairs: new Set() };
   }
 }
 
@@ -178,13 +181,18 @@ function isTop(row) {
   return text.includes("BLACK") || text.includes("FREE") || text.includes("NON SUGAR") || text.includes("TOP");
 }
 
+function isTopFromAux(row, auxiliaryRules) {
+  const pair = `${normalizeText(row.marca)}|${normalizeText(row.calibre)}`;
+  return auxiliaryRules?.topPairs?.has(pair);
+}
+
 function rowMatchesObjective(row, objectiveKey, auxiliaryRules) {
   if (objectiveKey === "BD GATORADE") return row.marca === "GATORADE";
   if (objectiveKey === "BD AGUAS") return row.negocio === "Aguas";
   if (objectiveKey === "BD MARKETPLACE PURO") return row.negocio === "Marketplace";
   if (objectiveKey === "BD ENERGIA") return isEnergy(row);
   if (objectiveKey === "BD CSDs MS") return isCsdMs(row, auxiliaryRules);
-  if (objectiveKey === "BD TOP") return isTop(row);
+  if (objectiveKey === "BD TOP") return isTopFromAux(row, auxiliaryRules);
   return row.negocio !== "Marketplace";
 }
 
@@ -215,7 +223,7 @@ function performanceDefinitions(auxiliaryRules) {
   { key: "BD TOTAL NABS", label: "BD Total NABS", tipo: "BD", matcher: (row) => row.negocio !== "Marketplace", calc: brandDistributionCount },
   { key: "BD GATORADE", label: "BD Gatorade", tipo: "BD", matcher: (row) => row.marca === "GATORADE", calc: brandDistributionCount },
   { key: "BD CSDs MS", label: "BD CSDs MS", tipo: "BD", matcher: (row) => isCsdMs(row, auxiliaryRules), calc: brandDistributionCount },
-  { key: "BD TOP", label: "BD TOP", tipo: "BD", matcher: isTop, calc: brandDistributionCount },
+  { key: "BD TOP", label: "BD TOP", tipo: "BD", matcher: (row) => isTopFromAux(row, auxiliaryRules), calc: brandDistributionCount },
   { key: "BD ENERGIA", label: "BD Energia", tipo: "BD", matcher: isEnergy, calc: brandDistributionCount },
   { key: "BD AGUAS", label: "BD Aguas", tipo: "BD", matcher: (row) => row.negocio === "Aguas", calc: brandDistributionCount },
   { key: "BD MARKETPLACE PURO", label: "BD Marketplace puro", tipo: "BD", matcher: (row) => row.negocio === "Marketplace", calc: brandDistributionCount },
