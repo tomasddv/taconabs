@@ -263,6 +263,13 @@ function App() {
     load({});
   }, []);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      load(filters);
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [filters]);
+
   const byDay = useMemo(() => data?.byDay || [], [data]);
   const detailRows = useMemo(() => {
     const term = detailSearch.toLowerCase();
@@ -426,7 +433,8 @@ function App() {
                   columns={[
                     { key: "promotor", label: "Promotor" },
                     { key: "activosMes", label: "Acum. activos mes", render: (v) => number(v, 0) },
-                    { key: "vsDiaAnterior", label: "vs día anterior", render: (v) => number(v, 0) },
+                    { key: "activacionesDia", label: "Activaciones día", render: (v) => number(v, 0) },
+                    { key: "vsDiaAnterior", label: "Nuevos día", render: (v) => number(v, 0) },
                     { key: "clientes", label: "Clientes únicos", render: (v) => number(v, 0) },
                     { key: "hl", label: "HL", render: (v) => number(v) },
                     { key: "importeNeto", label: "Importe", render: (v) => money(v) },

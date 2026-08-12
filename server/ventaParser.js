@@ -354,6 +354,17 @@ function customerActivationsBySeller(monthRows, visibleRows) {
   const latestDate = [...new Set(visibleRows.map((row) => row.fechaISO).filter(Boolean))].sort().at(-1);
   if (!latestDate) return [];
   const latestMonth = latestDate.slice(0, 7);
+  const latestDayBySeller = new Map();
+  for (const row of visibleRows) {
+    if (row.fechaISO !== latestDate) continue;
+    const seller = row.vendedor || "Sin dato";
+    const clientKey = row.clienteCodigo || row.cliente;
+    if (!clientKey) continue;
+    const current = latestDayBySeller.get(seller) || new Set();
+    current.add(clientKey);
+    latestDayBySeller.set(seller, current);
+  }
+
   const firstByClient = new Map();
   for (const row of [...monthRows].sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)))) {
     if (!row.fechaISO || row.fechaISO.slice(0, 7) !== latestMonth || row.fechaISO > latestDate) continue;
@@ -369,6 +380,7 @@ function customerActivationsBySeller(monthRows, visibleRows) {
       label: seller,
       promotor: seller,
       activosMes: 0,
+      activacionesDia: 0,
       vsDiaAnterior: 0,
       clientesSet: new Set(),
       hl: 0,
@@ -383,18 +395,34 @@ function customerActivationsBySeller(monthRows, visibleRows) {
     current.facturas += row.facturas;
     grouped.set(seller, current);
   }
+  for (const [seller, clients] of latestDayBySeller.entries()) {
+    const current = grouped.get(seller) || {
+      label: seller,
+      promotor: seller,
+      activosMes: 0,
+      activacionesDia: 0,
+      vsDiaAnterior: 0,
+      clientesSet: new Set(),
+      hl: 0,
+      importeNeto: 0,
+      facturas: 0
+    };
+    current.activacionesDia = clients.size;
+    grouped.set(seller, current);
+  }
   return [...grouped.values()]
     .map((item) => ({
       label: item.label,
       promotor: item.promotor,
       activosMes: item.activosMes,
+      activacionesDia: item.activacionesDia,
       vsDiaAnterior: item.vsDiaAnterior,
       clientes: item.clientesSet.size,
       hl: item.hl,
       importeNeto: item.importeNeto,
       facturas: item.facturas
     }))
-    .sort((a, b) => b.vsDiaAnterior - a.vsDiaAnterior || b.activosMes - a.activosMes);
+    .sort((a, b) => b.activacionesDia - a.activacionesDia || b.vsDiaAnterior - a.vsDiaAnterior || b.activosMes - a.activosMes);
 }
 
 function makeExecutive(totals, dates, objective = null) {
