@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { Readable } from "node:stream";
 import { google } from "googleapis";
 
 export function buildDownloadUrl(fileId) {
@@ -43,4 +44,40 @@ export async function uploadFileToDrive({ filePath, fileName, mimeType, folderId
     fields: "id,name,webViewLink,createdTime,modifiedTime"
   });
   return result.data;
+}
+
+export async function uploadTextToDrive({ text, fileName, mimeType = "application/json", folderId }) {
+  const drive = await getDriveClient();
+  const result = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      parents: folderId ? [folderId] : undefined
+    },
+    media: {
+      mimeType,
+      body: Readable.from([text])
+    },
+    fields: "id,name,webViewLink,createdTime,modifiedTime"
+  });
+  return result.data;
+}
+
+export async function listDriveFiles({ folderId, namePrefix }) {
+  const drive = await getDriveClient();
+  const queryParts = ["trashed = false"];
+  if (folderId) queryParts.push(`'${folderId}' in parents`);
+  if (namePrefix) queryParts.push(`name contains '${namePrefix.replace(/'/g, "\\'")}'`);
+  const result = await drive.files.list({
+    q: queryParts.join(" and "),
+    fields: "files(id,name,webViewLink,createdTime,modifiedTime)",
+    orderBy: "name desc",
+    pageSize: 100
+  });
+  return result.data.files || [];
+}
+
+export async function downloadDriveText(fileId) {
+  const drive = await getDriveClient();
+  const result = await drive.files.get({ fileId, alt: "media" }, { responseType: "text" });
+  return typeof result.data === "string" ? result.data : JSON.stringify(result.data);
 }

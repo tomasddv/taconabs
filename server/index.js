@@ -7,6 +7,7 @@ import { config } from "./config.js";
 import { downloadDriveFile, uploadFileToDrive } from "./drive.js";
 import { parseVentaDiaria, summarizeVenta } from "./ventaParser.js";
 import { buildObjectivePerformance, distributeObjective, loadAuxiliaryRules, loadComboObjective, loadObjectiveWorkbook, objectiveKeyForQuery } from "./objectives.js";
+import { buildMonthlyClosure, listMonthlyClosures, saveMonthlyClosure } from "./monthlyClosures.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -16,6 +17,8 @@ let objectiveCache = null;
 let comboObjectiveCache = undefined;
 let auxiliaryRulesCache = null;
 let historicalCache = null;
+const dashboardCache = new Map();
+const MAX_DASHBOARD_CACHE_ENTRIES = 12;
 
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
@@ -26,26 +29,43 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/dashboard", async (req, res, next) => {
   try {
-    const buffer = await downloadDriveFile(config.ventaDiariaFileId);
-    const parsed = parseVentaDiaria(buffer);
-    const objective = await getObjective();
-    const comboObjective = await getComboObjective();
-    const auxiliaryRules = await getAuxiliaryRules();
-    const historicalRows = await getHistoricalRows(parsed.rows);
-    res.json(
-      summarizeVenta(parsed, req.query, {
-        distributeObjective: ({ currentRows, query }) =>
-          distributeObjective({
-            objective,
-            objectiveKey: objectiveKeyForQuery(query),
-            historicalRows,
-            currentRows,
-            auxiliaryRules
-          }),
-        buildObjectivePerformance: ({ rows, dateSet }) => buildObjectivePerformance({ objective, rows, dateSet, auxiliaryRules }),
-        comboObjective
+    const { dashboard } = await getDashboardPayload(req.query);
+    res.json(dashboard);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/monthly-closures", async (_req, res, next) => {
+  try {
+    res.json({
+      closes: await listMonthlyClosures({
+        rootDir,
+        folderId: config.driveFolderId
       })
-    );
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/monthly-closures", async (req, res, next) => {
+  try {
+    const month = String(req.body?.month || "").trim();
+    const { dashboard, parsed } = await getDashboardPayload(month ? { mes: month } : {}, { includeParsed: true });
+    const closure = buildMonthlyClosure({
+      dashboard,
+      rows: parsed.rows,
+      month,
+      sourceFile: "ventadiaria.txt"
+    });
+    const saved = await saveMonthlyClosure({
+      closure,
+      rootDir,
+      folderId: config.driveFolderId
+    });
+    dashboardCache.clear();
+    res.json({ ok: true, closure, saved });
   } catch (error) {
     next(error);
   }
@@ -122,6 +142,44 @@ async function getAuxiliaryRules() {
     auxiliaryRulesCache = await loadAuxiliaryRules({ driveFileId: config.auxiliaresFileId });
   }
   return auxiliaryRulesCache;
+}
+
+function dashboardCacheKey(query = {}) {
+  return JSON.stringify(Object.fromEntries(Object.entries(query).sort(([a], [b]) => a.localeCompare(b))));
+}
+
+async function getDashboardPayload(query = {}, options = {}) {
+  const key = dashboardCacheKey(query);
+  const cached = dashboardCache.get(key);
+  if (!options.includeParsed && cached && Date.now() - cached.createdAt < config.dashboardCacheMs) {
+    return { dashboard: cached.dashboard };
+  }
+
+  const buffer = await downloadDriveFile(config.ventaDiariaFileId);
+  const parsed = parseVentaDiaria(buffer);
+  const objective = await getObjective();
+  const comboObjective = await getComboObjective();
+  const auxiliaryRules = await getAuxiliaryRules();
+  const historicalRows = await getHistoricalRows(parsed.rows);
+  const dashboard = summarizeVenta(parsed, query, {
+    distributeObjective: ({ currentRows, query: currentQuery }) =>
+      distributeObjective({
+        objective,
+        objectiveKey: objectiveKeyForQuery(currentQuery),
+        historicalRows,
+        currentRows,
+        auxiliaryRules
+      }),
+    buildObjectivePerformance: ({ rows, dateSet }) => buildObjectivePerformance({ objective, rows, dateSet, auxiliaryRules }),
+    comboObjective
+  });
+  if (!options.includeParsed) {
+    if (dashboardCache.size >= MAX_DASHBOARD_CACHE_ENTRIES) {
+      dashboardCache.delete(dashboardCache.keys().next().value);
+    }
+    dashboardCache.set(key, { createdAt: Date.now(), dashboard });
+  }
+  return options.includeParsed ? { dashboard, parsed } : { dashboard };
 }
 
 async function getHistoricalRows(currentRows) {

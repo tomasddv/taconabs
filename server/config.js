@@ -13,6 +13,7 @@ export const config = {
   objetivoLocalPath: process.env.OBJETIVO_LOCAL_PATH || "uploads/objetivos-agosto-202608.xlsx",
   seguimientoLocalPath: process.env.SEGUIMIENTO_LOCAL_PATH || "C:/Users/triesgo/Downloads/SEGUIMIENTO AGOSTO!.xlsx",
   comboObjectiveFallback: Number(process.env.COMBO_OBJECTIVE || 170),
+  dashboardCacheMs: Number(process.env.DASHBOARD_CACHE_MS || 10 * 60 * 1000),
   historicalVentaFileIds: (process.env.HISTORICAL_VENTA_FILE_IDS ?? defaultHistoricalVentaFileIds)
     .split(",")
     .map((item) => item.trim())

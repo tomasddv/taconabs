@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AlertCircle,
+  Archive,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -37,6 +38,7 @@ const SHEETS = [
   { id: "clientes", label: "Clientes con Compra" },
   { id: "marketplace", label: "Marketplace" },
   { id: "combos", label: "Combos y Focos" },
+  { id: "historico", label: "Histórico Mensual" },
   { id: "detalle", label: "Detalle Operativo" },
   { id: "calidad", label: "Calidad" },
   { id: "carga", label: "Carga Mensual" }
@@ -215,6 +217,86 @@ function UploadPanel() {
   );
 }
 
+function MonthlyHistoryPanel({ closures, data, onCloseMonth, closingMonth }) {
+  const [month, setMonth] = useState(data?.filters?.mes?.at(-1) || new Date().toISOString().slice(0, 7));
+  const [status, setStatus] = useState(null);
+
+  async function closeMonth() {
+    setStatus(null);
+    const result = await onCloseMonth(month);
+    setStatus(result);
+  }
+
+  const summaryRows = (closures || []).map((closure) => ({
+    month: closure.month,
+    hl: closure.totals?.hl,
+    clientes: closure.totals?.clientes,
+    skus: closure.totals?.skus,
+    importeNeto: closure.totals?.importeNeto,
+    objetivo: closure.executive?.objective,
+    avance: closure.executive?.progress,
+    tendencia: closure.executive?.projectedClose,
+    estado: closure.executive?.status,
+    storage: closure.storage === "drive" ? "Drive" : "Local"
+  }));
+
+  return (
+    <section className="wideGrid">
+      <Panel title="Cerrar mes" sub="Genera un resumen liviano del mes y lo guarda para consultar históricos." icon={Archive}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            closeMonth();
+          }}
+        >
+          <label>
+            Mes a cerrar
+            <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+          </label>
+          <button disabled={closingMonth || !month} type="submit">
+            {closingMonth ? "Generando..." : "Cerrar mes"}
+          </button>
+        </form>
+        {status ? (
+          <div className={`status ${status.type}`}>
+            {status.type === "ok"
+              ? status.drive
+                ? `Cierre ${status.month} guardado en Drive.`
+                : `Cierre ${status.month} generado localmente. Falta credencial para guardar en Drive.`
+              : status.error}
+          </div>
+        ) : null}
+      </Panel>
+      <Panel title="Histórico mensual" sub="Indicadores cerrados, sin recalcular archivos pesados." icon={CalendarDays}>
+        <SimpleTable
+          columns={[
+            { key: "month", label: "Mes" },
+            { key: "hl", label: "HL", render: (v) => number(v) },
+            { key: "objetivo", label: "Objetivo", render: (v) => (v ? number(v) : "Pendiente") },
+            { key: "avance", label: "Avance", render: (v) => percent(v) },
+            { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
+            { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
+            { key: "importeNeto", label: "Importe", render: (v) => money(v) },
+            { key: "estado", label: "Semáforo" },
+            { key: "storage", label: "Guardado" }
+          ]}
+          rows={summaryRows}
+          limit={24}
+        />
+      </Panel>
+      <Panel title="Ranking último cierre" sub="Promotores del cierre mensual más reciente." icon={BarChart3}>
+        <SimpleTable columns={[
+          { key: "label", label: "Promotor" },
+          { key: "hl", label: "HL", render: (v) => number(v) },
+          { key: "clientes", label: "CCC", render: (v) => number(v, 0) },
+          { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
+          { key: "importeNeto", label: "Importe", render: (v) => money(v) }
+        ]} rows={closures?.[0]?.tables?.bySeller || []} limit={30} />
+      </Panel>
+    </section>
+  );
+}
+
 function downloadDetail(rows, preferredHeaders = null) {
   const headers =
     preferredHeaders ||
@@ -242,6 +324,8 @@ function App() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({});
+  const [closures, setClosures] = useState([]);
+  const [closingMonth, setClosingMonth] = useState(false);
   const [detailSearch, setDetailSearch] = useState("");
   const [activeSheet, setActiveSheet] = useState("resumen");
 
@@ -264,8 +348,42 @@ function App() {
     }
   }
 
+  async function loadClosures() {
+    try {
+      const response = await fetch(`${API_URL}/api/monthly-closures`);
+      const payload = await response.json();
+      if (response.ok) setClosures(payload.closes || []);
+    } catch {
+      setClosures([]);
+    }
+  }
+
+  async function closeMonth(month) {
+    setClosingMonth(true);
+    try {
+      const response = await fetch(`${API_URL}/api/monthly-closures`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      await loadClosures();
+      return {
+        type: "ok",
+        month: payload.closure?.month || month,
+        drive: Boolean(payload.saved?.driveFile)
+      };
+    } catch (err) {
+      return { type: "error", error: err.message };
+    } finally {
+      setClosingMonth(false);
+    }
+  }
+
   useEffect(() => {
     load({});
+    loadClosures();
   }, []);
 
   useEffect(() => {
@@ -636,6 +754,10 @@ function App() {
             <div className="spacer" />
             <SimpleTable columns={sellerColumns} rows={data?.combosFocus?.bySeller || []} limit={18} />
           </Panel>
+        ) : null}
+
+        {activeSheet === "historico" ? (
+          <MonthlyHistoryPanel closures={closures} data={data} onCloseMonth={closeMonth} closingMonth={closingMonth} />
         ) : null}
 
         {activeSheet === "detalle" ? (
