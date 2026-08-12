@@ -350,39 +350,51 @@ function dailyCustomerActivations(rows) {
   }, new Map());
 }
 
-function customerActivationsBySeller(rows) {
+function customerActivationsBySeller(monthRows, visibleRows) {
+  const latestDate = [...new Set(visibleRows.map((row) => row.fechaISO).filter(Boolean))].sort().at(-1);
+  if (!latestDate) return [];
+  const latestMonth = latestDate.slice(0, 7);
+  const firstByClient = new Map();
+  for (const row of [...monthRows].sort((a, b) => String(a.fechaISO).localeCompare(String(b.fechaISO)))) {
+    if (!row.fechaISO || row.fechaISO.slice(0, 7) !== latestMonth || row.fechaISO > latestDate) continue;
+    const clientKey = row.clienteCodigo || row.cliente;
+    if (!clientKey || firstByClient.has(clientKey)) continue;
+    firstByClient.set(clientKey, row);
+  }
+
   const grouped = new Map();
-  for (const row of customerPurchasesByDay(rows)) {
-    const sellers = row.promotor.split(",").map((seller) => seller.trim()).filter(Boolean);
-    for (const seller of sellers.length ? sellers : ["Sin dato"]) {
-      const current = grouped.get(seller) || {
-        label: seller,
-        promotor: seller,
-        activaciones: 0,
-        clientesSet: new Set(),
-        hl: 0,
-        importeNeto: 0,
-        facturas: 0
-      };
-      current.activaciones += 1;
-      current.clientesSet.add(row.clienteCodigo || row.cliente);
-      current.hl += row.hl;
-      current.importeNeto += row.importeNeto;
-      current.facturas += row.facturas;
-      grouped.set(seller, current);
-    }
+  for (const row of firstByClient.values()) {
+    const seller = row.vendedor || "Sin dato";
+    const current = grouped.get(seller) || {
+      label: seller,
+      promotor: seller,
+      activosMes: 0,
+      vsDiaAnterior: 0,
+      clientesSet: new Set(),
+      hl: 0,
+      importeNeto: 0,
+      facturas: 0
+    };
+    current.activosMes += 1;
+    if (row.fechaISO === latestDate) current.vsDiaAnterior += 1;
+    current.clientesSet.add(row.clienteCodigo || row.cliente);
+    current.hl += row.hl;
+    current.importeNeto += row.importeNeto;
+    current.facturas += row.facturas;
+    grouped.set(seller, current);
   }
   return [...grouped.values()]
     .map((item) => ({
       label: item.label,
       promotor: item.promotor,
-      activaciones: item.activaciones,
+      activosMes: item.activosMes,
+      vsDiaAnterior: item.vsDiaAnterior,
       clientes: item.clientesSet.size,
       hl: item.hl,
       importeNeto: item.importeNeto,
       facturas: item.facturas
     }))
-    .sort((a, b) => b.activaciones - a.activaciones);
+    .sort((a, b) => b.vsDiaAnterior - a.vsDiaAnterior || b.activosMes - a.activosMes);
 }
 
 function makeExecutive(totals, dates, objective = null) {
@@ -489,10 +501,16 @@ function isAllowedProduct(row) {
   return ["UNG", "Aguas", "Marketplace", "Match"].includes(row.negocio);
 }
 
+function withoutDateRange(query) {
+  const { fecha, fechaDesde, fechaHasta, ...rest } = query;
+  return rest;
+}
+
 export function summarizeVenta(parsed, query = {}) {
   const allRows = parsed.rows || parsed;
   const allowedRows = allRows.filter(isAllowedProduct);
   const rows = applyFilters(allowedRows, query);
+  const monthlyActivationRows = applyFilters(allowedRows, withoutDateRange(query));
   const dateSet = new Set(rows.map((row) => row.fechaISO).filter(Boolean));
   const totals = {
     hl: sum(rows, "hl"),
@@ -515,6 +533,7 @@ export function summarizeVenta(parsed, query = {}) {
   const customerPurchaseTrend = [...dailyCustomerActivations(rows).values()].sort((a, b) =>
     String(a.fechaISO).localeCompare(String(b.fechaISO))
   );
+  const customerPurchaseBySeller = customerActivationsBySeller(monthlyActivationRows, rows);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -551,7 +570,9 @@ export function summarizeVenta(parsed, query = {}) {
     },
     customerPurchases: {
       totalClientes: distinctCount(rows, "clienteCodigo"),
-      bySeller: customerActivationsBySeller(rows),
+      totalActivosMes: customerPurchaseBySeller.reduce((total, row) => total + row.activosMes, 0),
+      totalVsDiaAnterior: customerPurchaseBySeller.reduce((total, row) => total + row.vsDiaAnterior, 0),
+      bySeller: customerPurchaseBySeller,
       dailyTrend: customerPurchaseTrend,
       detail: customerPurchaseDetail
     },

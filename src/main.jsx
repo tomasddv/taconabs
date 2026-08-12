@@ -415,17 +415,18 @@ function App() {
         {activeSheet === "clientes" ? (
           <>
             <section className="metricsGrid">
-              <Metric title="Clientes con compra" value={number(data?.customerPurchases?.totalClientes, 0)} sub="Únicos en el período filtrado" icon={CheckCircle2} />
+              <Metric title="Acum. activos mes" value={number(data?.customerPurchases?.totalActivosMes, 0)} sub="Cliente único por marca/SKU filtrada" icon={CheckCircle2} />
+              <Metric title="vs día anterior" value={number(data?.customerPurchases?.totalVsDiaAnterior, 0)} sub="Nuevos activos del último día filtrado" icon={RefreshCw} />
               <Metric title="Días con activación" value={number(data?.customerPurchases?.dailyTrend?.length, 0)} sub="Según rango Desde / Hasta" icon={CalendarDays} />
               <Metric title="Registros diarios" value={number(data?.customerPurchases?.detail?.length, 0)} sub="Cliente por día" icon={Database} />
-              <Metric title="Filtro SKU" value={filters.sku ? "Activo" : "Todos"} sub={filters.marca || "Marca: todas"} icon={Filter} />
             </section>
             <section className="wideGrid">
-              <Panel title="Total de activaciones por promotor" sub="Cliente con compra por día, según período, marca y SKU filtrados." icon={CalendarDays}>
+              <Panel title="Total de activaciones por promotor" sub="Cliente único activado en el mes. Si ya compró la marca/SKU filtrada, no vuelve a sumar." icon={CalendarDays}>
                 <SimpleTable
                   columns={[
                     { key: "promotor", label: "Promotor" },
-                    { key: "activaciones", label: "Activaciones", render: (v) => number(v, 0) },
+                    { key: "activosMes", label: "Acum. activos mes", render: (v) => number(v, 0) },
+                    { key: "vsDiaAnterior", label: "vs día anterior", render: (v) => number(v, 0) },
                     { key: "clientes", label: "Clientes únicos", render: (v) => number(v, 0) },
                     { key: "hl", label: "HL", render: (v) => number(v) },
                     { key: "importeNeto", label: "Importe", render: (v) => money(v) },
