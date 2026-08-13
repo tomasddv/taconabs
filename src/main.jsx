@@ -112,7 +112,7 @@ function Filters({ data, filters, setFilters, refresh, loading }) {
   const update = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
   const clear = () => setFilters({});
   return (
-    <Panel title="Filtros" sub="Mes, fecha de corte, promotor, negocio, producto, marca, calibre, canal y cliente." icon={Filter}>
+    <Panel title="Filtros" sub="Mes, fecha de corte, supervisor, promotor, negocio, producto, marca, calibre, canal y cliente." icon={Filter}>
       <div className="filterGrid">
         <SelectFilter label="Mes" value={filters.mes} options={options.mes} onChange={(v) => update("mes", v)} />
         <label>
@@ -124,6 +124,7 @@ function Filters({ data, filters, setFilters, refresh, loading }) {
           <input type="date" value={filters.fechaHasta || ""} onChange={(event) => update("fechaHasta", event.target.value)} />
         </label>
         <SelectFilter label="Fecha" value={filters.fecha} options={options.fecha} onChange={(v) => update("fecha", v)} />
+        <SelectFilter label="Supervisor" value={filters.supervisor} options={options.supervisor} onChange={(v) => update("supervisor", v)} />
         <SelectFilter label="Promotor" value={filters.promotor} options={options.promotor} onChange={(v) => update("promotor", v)} />
         <SelectFilter label="Negocio" value={filters.negocio} options={options.negocio} onChange={(v) => update("negocio", v)} />
         <SelectFilter label="Grupo producto" value={filters.grupoProducto} options={options.grupoProducto} onChange={(v) => update("grupoProducto", v)} />
@@ -300,7 +301,7 @@ function MonthlyHistoryPanel({ closures, data, onCloseMonth, closingMonth }) {
 function downloadDetail(rows, preferredHeaders = null) {
   const headers =
     preferredHeaders ||
-    ["fecha", "vendedor", "cliente", "marca", "calibre", "productoEstadistico", "negocio", "hl", "importeNeto", "facturas"];
+    ["fecha", "supervisor", "vendedor", "cliente", "marca", "calibre", "productoEstadistico", "negocio", "hl", "importeNeto", "facturas"];
   const csv = [headers.join(",")]
     .concat(
       (rows || []).map((row) =>
@@ -317,6 +318,86 @@ function downloadDetail(rows, preferredHeaders = null) {
   link.download = "detalle-operativo.csv";
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function cleanSheetName(name) {
+  return String(name).replace(/[\\/?*[\]:]/g, " ").slice(0, 31);
+}
+
+function addJsonSheet(XLSX, workbook, name, rows) {
+  const safeRows = (rows || []).map((row) => {
+    const clean = {};
+    for (const [key, value] of Object.entries(row || {})) {
+      if (value === null || value === undefined) clean[key] = "";
+      else if (typeof value === "object") clean[key] = JSON.stringify(value);
+      else clean[key] = value;
+    }
+    return clean;
+  });
+  const sheet = XLSX.utils.json_to_sheet(safeRows.length ? safeRows : [{ mensaje: "Sin datos" }]);
+  XLSX.utils.book_append_sheet(workbook, sheet, cleanSheetName(name));
+}
+
+async function exportDashboardWorkbook(data, closures, filters) {
+  if (!data) return;
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.utils.book_new();
+  const filterRows = Object.entries(filters || {}).map(([filtro, valor]) => ({ filtro, valor }));
+  addJsonSheet(XLSX, workbook, "Filtros", filterRows.length ? filterRows : [{ filtro: "Sin filtros", valor: "" }]);
+  addJsonSheet(XLSX, workbook, "Resumen", [
+    { indicador: "Venta acumulada HL", valor: data.totals?.hl },
+    { indicador: "Objetivo mensual", valor: data.executive?.objective },
+    { indicador: "Avance", valor: data.executive?.progress },
+    { indicador: "Tendencia cierre", valor: data.executive?.projectedClose },
+    { indicador: "Faltante", valor: data.executive?.missing },
+    { indicador: "Días hábiles transcurridos", valor: data.executive?.elapsedBusinessDays },
+    { indicador: "Días hábiles restantes", valor: data.executive?.remainingBusinessDays },
+    { indicador: "Semáforo", valor: data.executive?.status },
+    { indicador: "Importe neto", valor: data.totals?.importeNeto },
+    { indicador: "Clientes CCC", valor: data.totals?.clientes },
+    { indicador: "SKUs", valor: data.totals?.skus },
+    { indicador: "Registros", valor: data.totalRows }
+  ]);
+  addJsonSheet(XLSX, workbook, "Venta diaria", data.byDay);
+  addJsonSheet(XLSX, workbook, "Ranking HL", data.bySeller);
+  addJsonSheet(XLSX, workbook, "Ranking CCC", data.bySellerCcc);
+  addJsonSheet(XLSX, workbook, "Objetivo Promotor", data.objectiveDistribution?.bySeller);
+  addJsonSheet(XLSX, workbook, "Performance Objetivos", data.objectivePerformance);
+  addJsonSheet(XLSX, workbook, "Volumen Negocio", data.byBusiness);
+  addJsonSheet(XLSX, workbook, "Volumen Marca", data.byBrand);
+  addJsonSheet(XLSX, workbook, "Volumen Calibre", data.byCaliber);
+  addJsonSheet(XLSX, workbook, "CCC UNG", data.coverage?.cccTotalUng);
+  addJsonSheet(XLSX, workbook, "CCC Aguas", data.coverage?.cccAguas);
+  addJsonSheet(XLSX, workbook, "CCC Red Bull", data.coverage?.cccRedBull);
+  addJsonSheet(XLSX, workbook, "CCC Marketplace", data.coverage?.cccMarketplace);
+  addJsonSheet(XLSX, workbook, "CCC Producto", data.coverage?.byProduct);
+  addJsonSheet(XLSX, workbook, "BD Cliente SKU", data.brandDistribution?.skusByClient);
+  addJsonSheet(XLSX, workbook, "BD Promotor Negocio", data.brandDistribution?.byPromotorNegocio);
+  addJsonSheet(XLSX, workbook, "BD Marca Calibre", data.brandDistribution?.byPromotorMarcaCalibre);
+  addJsonSheet(XLSX, workbook, "Clientes Activados", data.customerPurchases?.bySeller);
+  addJsonSheet(XLSX, workbook, "Detalle Clientes", data.customerPurchases?.detail);
+  addJsonSheet(XLSX, workbook, "Marketplace", data.marketplace?.bySeller);
+  addJsonSheet(XLSX, workbook, "Combos CCC", data.combosFocus?.byComboCcc);
+  addJsonSheet(XLSX, workbook, "Combos Promotor", data.combosFocus?.bySeller);
+  addJsonSheet(XLSX, workbook, "Detalle Operativo", data.operationalDetail);
+  addJsonSheet(XLSX, workbook, "Calidad", [
+    { indicador: "Archivo", valor: data.quality?.sourceFile },
+    { indicador: "Registros cargados", valor: data.quality?.loadedRows },
+    { indicador: "Duplicados", valor: data.quality?.duplicates },
+    { indicador: "Columnas faltantes", valor: (data.quality?.missingHeaders || []).join(", ") || "Sin faltantes" }
+  ]);
+  addJsonSheet(XLSX, workbook, "Historico Mensual", (closures || []).map((closure) => ({
+    mes: closure.month,
+    hl: closure.totals?.hl,
+    objetivo: closure.executive?.objective,
+    avance: closure.executive?.progress,
+    ccc: closure.totals?.clientes,
+    skus: closure.totals?.skus,
+    importeNeto: closure.totals?.importeNeto,
+    semaforo: closure.executive?.status,
+    guardado: closure.storage
+  })));
+  XLSX.writeFile(workbook, `dashboard-ventas-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 function App() {
@@ -404,7 +485,7 @@ function App() {
     const term = detailSearch.toLowerCase();
     if (!term) return data?.operationalDetail || [];
     return (data?.operationalDetail || []).filter((row) =>
-      [row.vendedor, row.cliente, row.marca, row.calibre, row.productoEstadistico, row.negocio].some((value) =>
+      [row.supervisor, row.vendedor, row.cliente, row.marca, row.calibre, row.productoEstadistico, row.negocio].some((value) =>
         String(value || "").toLowerCase().includes(term)
       )
     );
@@ -445,10 +526,16 @@ function App() {
           <h1>Dashboard Ventas Diarias</h1>
           <p>Fuente activa: ventadiaria.txt. Solo UNG, Aguas, MKTP y Match.</p>
         </div>
-        <button className="iconButton" onClick={() => load()} disabled={loading} title="Actualizar">
-          <RefreshCw size={18} />
-          Actualizar
-        </button>
+        <div className="topbarActions">
+          <button className="secondaryButton" onClick={() => exportDashboardWorkbook(data, closures, filters)} disabled={!data} title="Exportar Excel" type="button">
+            <Download size={18} />
+            Exportar Excel
+          </button>
+          <button className="iconButton" onClick={() => load()} disabled={loading} title="Actualizar" type="button">
+            <RefreshCw size={18} />
+            Actualizar
+          </button>
+        </div>
       </header>
 
       {error ? (
@@ -686,6 +773,7 @@ function App() {
                         "clienteCodigo",
                         "cliente",
                         "promotor",
+                        "supervisor",
                         "marcas",
                         "calibres",
                         "skus",
@@ -706,6 +794,7 @@ function App() {
                     { key: "fecha", label: "Fecha" },
                     { key: "cliente", label: "Cliente" },
                     { key: "promotor", label: "Promotor" },
+                    { key: "supervisor", label: "Supervisor" },
                     { key: "marcas", label: "Marcas" },
                     { key: "calibres", label: "Calibres" },
                     { key: "skus", label: "SKUs", render: (v) => number(v, 0) },
@@ -769,7 +858,7 @@ function App() {
                 Exportar
               </button>
             </div>
-            <SimpleTable columns={[{ key: "fecha", label: "Fecha" }, { key: "vendedor", label: "Vendedor" }, { key: "cliente", label: "Cliente" }, { key: "marca", label: "Marca" }, { key: "calibre", label: "Calibre" }, { key: "productoEstadistico", label: "Grupo producto" }, { key: "hl", label: "HL", render: (v) => number(v) }]} rows={detailRows} limit={40} />
+            <SimpleTable columns={[{ key: "fecha", label: "Fecha" }, { key: "supervisor", label: "Supervisor" }, { key: "vendedor", label: "Vendedor" }, { key: "cliente", label: "Cliente" }, { key: "marca", label: "Marca" }, { key: "calibre", label: "Calibre" }, { key: "productoEstadistico", label: "Grupo producto" }, { key: "hl", label: "HL", render: (v) => number(v) }]} rows={detailRows} limit={40} />
           </Panel>
         ) : null}
 
@@ -797,3 +886,4 @@ function App() {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+

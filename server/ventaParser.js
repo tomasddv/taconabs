@@ -68,6 +68,41 @@ const FIELD_ALIASES = {
   combos: ["Cantidades en Combos"]
 };
 
+const SUPERVISOR_BY_SELLER_CODE = new Map([
+  ["12", "ANIVAL VITI"],
+  ["22", "BRUNO ISMAEL"],
+  ["32", "BRUNO ISMAEL"],
+  ["43", "BRUNO ISMAEL"],
+  ["61", "BRUNO ISMAEL"],
+  ["71", "BRUNO ISMAEL"],
+  ["81", "BRUNO ISMAEL"],
+  ["91", "BRUNO ISMAEL"],
+  ["201", "HERNAN CASCO"],
+  ["202", "HERNAN CASCO"],
+  ["203", "HERNAN CASCO"],
+  ["204", "HERNAN CASCO"],
+  ["205", "HERNAN CASCO"],
+  ["606", "HERNAN CASCO"]
+]);
+
+const SUPERVISOR_BY_SELLER_NAME = new Map([
+  ["FEDERICO BISS", "ANIVAL VITI"],
+  ["MATIAS GARCIA", "BRUNO ISMAEL"],
+  ["SIRI MARTIN", "BRUNO ISMAEL"],
+  ["NICOLAS POCHETINO", "BRUNO ISMAEL"],
+  ["ALEXIS SEPULVEDA", "BRUNO ISMAEL"],
+  ["NICASTRO LUCAS", "BRUNO ISMAEL"],
+  ["GASTON FABRE", "BRUNO ISMAEL"],
+  ["VILLAGRA ENZO", "BRUNO ISMAEL"],
+  ["MENDEZ CARLOS", "HERNAN CASCO"],
+  ["PABLO ALVAREZ", "HERNAN CASCO"],
+  ["JUAN MANUEL GIMENEZ", "HERNAN CASCO"],
+  ["CONTESSI LEONARDO", "HERNAN CASCO"],
+  ["MARIANO HERRERA", "HERNAN CASCO"],
+  ["ALEXANDER ROJAS", "HERNAN CASCO"],
+  ["FERNANDO FIELG", "HERNAN CASCO"]
+]);
+
 function dedupeHeaders(headers) {
   const counts = new Map();
   return headers.map((header) => {
@@ -99,6 +134,12 @@ function normalizeText(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
     .trim();
+}
+
+function supervisorFor(row) {
+  const code = String(row.vendedorCodigo || "").trim();
+  const seller = normalizeText(row.vendedor);
+  return SUPERVISOR_BY_SELLER_CODE.get(code) || SUPERVISOR_BY_SELLER_NAME.get(seller) || "Sin supervisor";
 }
 
 function classifyBusiness(row) {
@@ -193,6 +234,7 @@ export function parseVentaDiaria(buffer) {
         facturas: numberFromAr(pick(source, FIELD_ALIASES.facturas)),
         combos: numberFromAr(pick(source, FIELD_ALIASES.combos))
       };
+      parsedRow.supervisor = supervisorFor(parsedRow);
       parsedRow.esCombo = isComboProduct(parsedRow);
       if (isGatoradeCombo(parsedRow)) {
         parsedRow.marca = parsedRow.marca || "GATORADE";
@@ -226,6 +268,7 @@ function groupBy(rows, key, sortMetric = "hl") {
     const label = row[key] || "Sin dato";
     const current = grouped.get(label) || {
       label,
+      supervisor: key === "vendedor" ? row.supervisor || "Sin supervisor" : undefined,
       rows: 0,
       clientesSet: new Set(),
       skuSet: new Set(),
@@ -250,6 +293,7 @@ function groupBy(rows, key, sortMetric = "hl") {
   return [...grouped.values()]
     .map((item) => ({
       label: item.label,
+      supervisor: item.supervisor,
       rows: item.rows,
       clientes: item.clientesSet.size,
       skus: item.skuSet.size,
@@ -273,6 +317,7 @@ function brandDistributionBySellerBrandCaliber(rows) {
     const current = grouped.get(key) || {
       label: seller,
       promotor: seller,
+      supervisor: row.supervisor || "Sin supervisor",
       marca: brand,
       calibre: caliber,
       rows: 0,
@@ -300,6 +345,7 @@ function brandDistributionBySellerBrandCaliber(rows) {
     .map((item) => ({
       label: item.label,
       promotor: item.promotor,
+      supervisor: item.supervisor,
       marca: item.marca,
       calibre: item.calibre,
       clientes: item.clientesSet.size,
@@ -324,6 +370,7 @@ function groupBySellerBusiness(rows) {
     const current = grouped.get(key) || {
       label: seller,
       promotor: seller,
+      supervisor: row.supervisor || "Sin supervisor",
       negocio: business,
       clientesSet: new Set(),
       skuSet: new Set(),
@@ -342,6 +389,7 @@ function groupBySellerBusiness(rows) {
     .map((item) => ({
       label: item.label,
       promotor: item.promotor,
+      supervisor: item.supervisor,
       negocio: item.negocio,
       skus: item.skuSet.size,
       clientes: item.clientesSet.size,
@@ -401,6 +449,7 @@ function customerPurchasesByDay(rows) {
       clienteCodigo: row.clienteCodigo,
       cliente: row.cliente,
       promotoresSet: new Set(),
+      supervisoresSet: new Set(),
       marcasSet: new Set(),
       calibresSet: new Set(),
       skuSet: new Set(),
@@ -413,6 +462,7 @@ function customerPurchasesByDay(rows) {
       rows: 0
     };
     current.promotoresSet.add(row.vendedor);
+    current.supervisoresSet.add(row.supervisor);
     current.marcasSet.add(row.marca);
     current.calibresSet.add(row.calibre);
     current.skuSet.add(row.articuloCodigo || row.articulo);
@@ -433,6 +483,7 @@ function customerPurchasesByDay(rows) {
       clienteCodigo: item.clienteCodigo,
       cliente: item.cliente,
       promotor: [...item.promotoresSet].filter(Boolean).join(", ") || "Sin dato",
+      supervisor: [...item.supervisoresSet].filter(Boolean).join(", ") || "Sin supervisor",
       marcas: [...item.marcasSet].filter(Boolean).join(", "),
       calibres: [...item.calibresSet].filter(Boolean).join(", "),
       skus: item.skuSet.size,
@@ -489,6 +540,7 @@ function customerActivationsBySeller(monthRows, visibleRows) {
     const current = grouped.get(seller) || {
       label: seller,
       promotor: seller,
+      supervisor: row.supervisor || "Sin supervisor",
       activosMes: 0,
       activacionesDia: 0,
       vsDiaAnterior: 0,
@@ -509,6 +561,7 @@ function customerActivationsBySeller(monthRows, visibleRows) {
     const current = grouped.get(seller) || {
       label: seller,
       promotor: seller,
+      supervisor: row.supervisor || "Sin supervisor",
       activosMes: 0,
       activacionesDia: 0,
       vsDiaAnterior: 0,
@@ -524,6 +577,7 @@ function customerActivationsBySeller(monthRows, visibleRows) {
     .map((item) => ({
       label: item.label,
       promotor: item.promotor,
+      supervisor: item.supervisor,
       activosMes: item.activosMes,
       activacionesDia: item.activacionesDia,
       vsDiaAnterior: item.vsDiaAnterior,
@@ -600,7 +654,7 @@ function filterOptions(rows) {
     fecha: optionFor("fecha"),
     fechaISO: optionFor("fechaISO"),
     promotor: optionFor("vendedor"),
-    supervisor: [],
+    supervisor: optionFor("supervisor"),
     negocio: optionFor("negocio"),
     grupoProducto: optionFor("productoEstadistico"),
     marca: optionFor("marca"),
@@ -619,6 +673,7 @@ export function applyFilters(rows, query = {}) {
     fechaDesde: (row, value) => !row.fechaISO || row.fechaISO >= value,
     fechaHasta: (row, value) => !row.fechaISO || row.fechaISO <= value,
     promotor: (row, value) => row.vendedor === value,
+    supervisor: (row, value) => row.supervisor === value,
     negocio: (row, value) => row.negocio === value,
     grupoProducto: (row, value) => row.productoEstadistico === value,
     marca: (row, value) => matchesBrand(row, value),
@@ -747,7 +802,6 @@ export function summarizeVenta(parsed, query = {}, context = {}) {
         ? null
         : "Objetivo mensual, avance contra objetivo y faltante requieren el Excel mensual de focos/objetivos con metas normalizadas.",
       "Clientes sin compra y % cobertura contra cartera requieren una base de universo/cartera.",
-      "Supervisor requiere mapeo vendedor-supervisor si no viene en ventadiaria.",
       "Combos se detectan por columna Cantidades en Combos o por articulo/producto que contenga COMBO.",
       "Marketplace solo se calcula si las filas contienen Marketplace/Mktplace en negocio o producto."
     ].filter(Boolean)

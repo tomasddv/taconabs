@@ -34,6 +34,13 @@ main {
   margin-bottom: 16px;
 }
 
+.topbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 h1,
 h2,
 p {
