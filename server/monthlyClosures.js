@@ -4,6 +4,15 @@ import { downloadDriveText, listDriveFiles, uploadTextToDrive } from "./drive.js
 
 const CLOSE_PREFIX = "cierre-";
 
+function hasDriveCredentials() {
+  return Boolean(
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 ||
+      process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+      (process.env.client_email && process.env.private_key)
+  );
+}
+
 function limitRows(rows, limit = 20) {
   return (rows || []).slice(0, limit);
 }
@@ -62,7 +71,7 @@ export async function saveMonthlyClosure({ closure, rootDir, folderId }) {
   await fs.writeFile(localPath, text, "utf8");
 
   let driveFile = null;
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  if (hasDriveCredentials()) {
     driveFile = await uploadTextToDrive({
       text,
       fileName,
@@ -91,7 +100,7 @@ export async function listMonthlyClosures({ rootDir, folderId }) {
     // Local monthly closes are optional.
   }
 
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  if (hasDriveCredentials()) {
     try {
       const files = await listDriveFiles({ folderId, namePrefix: CLOSE_PREFIX });
       for (const file of files.filter((item) => item.name.endsWith(".json"))) {

@@ -447,7 +447,11 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ month })
       });
-      const payload = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      const responseText = await response.text();
+      const payload = responseText && contentType.includes("application/json")
+        ? JSON.parse(responseText)
+        : { error: responseText || "Render no devolvio respuesta. Probá nuevamente en unos segundos." };
       if (!response.ok) throw new Error(payload.error);
       await loadClosures();
       return {
