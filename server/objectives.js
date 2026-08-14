@@ -206,6 +206,8 @@ function isH2oh(row) {
 }
 
 function isConvivencia(row) {
+  const brand = normalizeText(row.marca);
+  if (!["PEPSI", "7 UP", "PASO DE LOS TOROS"].includes(brand)) return false;
   const text = normalizeText(`${row.calibre} ${row.articulo} ${row.productoEstadistico}`);
   return text.includes("1500") || text.includes("1.5") || text.includes("1,5") || text.includes("2000") || text.includes("2L");
 }
