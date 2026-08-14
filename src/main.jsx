@@ -44,6 +44,27 @@ const SHEETS = [
   { id: "carga", label: "Carga Mensual" }
 ];
 
+function shortenApiText(text) {
+  const clean = String(text || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return clean.length > 180 ? `${clean.slice(0, 180)}...` : clean;
+}
+
+async function readApiPayload(response) {
+  const contentType = response.headers.get("content-type") || "";
+  const responseText = await response.text();
+  if (contentType.includes("application/json")) {
+    return responseText ? JSON.parse(responseText) : {};
+  }
+  if (responseText.trim().startsWith("<")) {
+    return {
+      error: "La API devolvió una página HTML en vez de datos. Esperá que Render termine el deploy y volvé a probar."
+    };
+  }
+  return {
+    error: shortenApiText(responseText) || "La API no devolvió respuesta. Probá nuevamente en unos segundos."
+  };
+}
+
 function money(value) {
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
@@ -188,7 +209,7 @@ function UploadPanel() {
     body.append("file", file);
     body.append("month", month);
     const response = await fetch(`${API_URL}/api/monthly-focus`, { method: "POST", body });
-    const payload = await response.json();
+    const payload = await readApiPayload(response);
     setLoading(false);
     setStatus(response.ok ? { type: "ok", payload } : { type: "error", payload });
   }
@@ -626,10 +647,7 @@ function App() {
     try {
       const params = new URLSearchParams(Object.entries(currentFilters).filter(([, value]) => value));
       const response = await fetch(`${API_URL}/api/dashboard?${params.toString()}`);
-      const contentType = response.headers.get("content-type") || "";
-      const payload = contentType.includes("application/json")
-        ? await response.json()
-        : { error: await response.text() };
+      const payload = await readApiPayload(response);
       if (!response.ok) throw new Error(payload.error);
       setData(payload);
     } catch (err) {
@@ -642,7 +660,7 @@ function App() {
   async function loadClosures() {
     try {
       const response = await fetch(`${API_URL}/api/monthly-closures`);
-      const payload = await response.json();
+      const payload = await readApiPayload(response);
       if (response.ok) setClosures(payload.closes || []);
     } catch {
       setClosures([]);
@@ -657,12 +675,9 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ month })
       });
-      const contentType = response.headers.get("content-type") || "";
-      const responseText = await response.text();
-      const payload = responseText && contentType.includes("application/json")
-        ? JSON.parse(responseText)
-        : { error: responseText || "Render no devolvio respuesta. Probá nuevamente en unos segundos." };
+      const payload = await readApiPayload(response);
       if (!response.ok) throw new Error(payload.error);
+      if (!payload.closure) throw new Error(payload.error || "No se pudo generar el cierre mensual.");
       await exportMonthlyClosureWorkbook(payload.closure);
       await loadClosures();
       return {

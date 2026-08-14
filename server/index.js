@@ -99,6 +99,12 @@ app.post("/api/monthly-focus", upload.single("file"), async (req, res, next) => 
   }
 });
 
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    error: `Ruta API no encontrada: ${req.method} ${req.originalUrl}`
+  });
+});
+
 const distDir = path.join(rootDir, "dist");
 
 app.use(express.static(distDir));
