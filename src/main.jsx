@@ -243,7 +243,7 @@ function MonthlyHistoryPanel({ closures, data, onCloseMonth, closingMonth }) {
 
   return (
     <section className="wideGrid">
-      <Panel title="Cerrar mes" sub="Genera un resumen liviano del mes y lo guarda para consultar históricos." icon={Archive}>
+      <Panel title="Cerrar mes" sub="Genera el cierre mensual y descarga un Excel en esta computadora." icon={Archive}>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -260,11 +260,7 @@ function MonthlyHistoryPanel({ closures, data, onCloseMonth, closingMonth }) {
         </form>
         {status ? (
           <div className={`status ${status.type}`}>
-            {status.type === "ok"
-              ? status.drive
-                ? `Cierre ${status.month} guardado en Drive.`
-                : `Cierre ${status.month} generado localmente. Drive no lo guardo: ${status.driveError || "falta credencial o permisos."}`
-              : status.error}
+            {status.type === "ok" ? `Cierre ${status.month} generado y descargado en Excel.` : status.error}
           </div>
         ) : null}
       </Panel>
@@ -400,6 +396,49 @@ async function exportDashboardWorkbook(data, closures, filters) {
   XLSX.writeFile(workbook, `dashboard-ventas-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
+async function exportMonthlyClosureWorkbook(closure) {
+  if (!closure) return;
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.utils.book_new();
+  addJsonSheet(XLSX, workbook, "Resumen", [
+    { indicador: "Mes", valor: closure.month },
+    { indicador: "Fecha cierre", valor: closure.closedAt },
+    { indicador: "Archivo fuente", valor: closure.sourceFile },
+    { indicador: "Venta acumulada HL", valor: closure.totals?.hl },
+    { indicador: "Objetivo mensual", valor: closure.executive?.objective },
+    { indicador: "Avance", valor: closure.executive?.progress },
+    { indicador: "Tendencia cierre", valor: closure.executive?.projectedClose },
+    { indicador: "Faltante", valor: closure.executive?.missing },
+    { indicador: "Días hábiles transcurridos", valor: closure.executive?.elapsedBusinessDays },
+    { indicador: "Días hábiles restantes", valor: closure.executive?.remainingBusinessDays },
+    { indicador: "Semáforo", valor: closure.executive?.status },
+    { indicador: "Importe neto", valor: closure.totals?.importeNeto },
+    { indicador: "Clientes CCC", valor: closure.totals?.clientes },
+    { indicador: "SKUs", valor: closure.totals?.skus },
+    { indicador: "Registros incluidos", valor: closure.generatedRows }
+  ]);
+  addJsonSheet(XLSX, workbook, "Ranking Promotor", closure.tables?.bySeller);
+  addJsonSheet(XLSX, workbook, "Ranking CCC", closure.tables?.bySellerCcc);
+  addJsonSheet(XLSX, workbook, "Objetivos", closure.tables?.objectivePerformance);
+  addJsonSheet(XLSX, workbook, "Objetivo Promotor", closure.tables?.objectiveDistribution);
+  addJsonSheet(XLSX, workbook, "Volumen Negocio", closure.tables?.byBusiness);
+  addJsonSheet(XLSX, workbook, "Volumen Marca", closure.tables?.byBrand);
+  addJsonSheet(XLSX, workbook, "Volumen Calibre", closure.tables?.byCaliber);
+  addJsonSheet(XLSX, workbook, "Cobertura UNG", closure.tables?.coverageUng);
+  addJsonSheet(XLSX, workbook, "Cobertura Aguas", closure.tables?.coverageAguas);
+  addJsonSheet(XLSX, workbook, "Cobertura Marketplace", closure.tables?.coverageMarketplace);
+  addJsonSheet(XLSX, workbook, "Brand Negocio", closure.tables?.brandByPromotorNegocio);
+  addJsonSheet(XLSX, workbook, "Combos Promotor", closure.tables?.combosBySeller);
+  addJsonSheet(XLSX, workbook, "Combos CCC", closure.tables?.combosByComboCcc);
+  addJsonSheet(XLSX, workbook, "Marketplace", closure.tables?.marketplaceBySeller);
+  addJsonSheet(XLSX, workbook, "Calidad", [
+    { indicador: "Registros cargados", valor: closure.quality?.loadedRows },
+    { indicador: "Duplicados", valor: closure.quality?.duplicates },
+    { indicador: "Columnas faltantes", valor: (closure.quality?.missingHeaders || []).join(", ") || "Sin faltantes" }
+  ]);
+  XLSX.writeFile(workbook, `cierre-${closure.month || new Date().toISOString().slice(0, 7)}.xlsx`);
+}
+
 function App() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -453,12 +492,11 @@ function App() {
         ? JSON.parse(responseText)
         : { error: responseText || "Render no devolvio respuesta. Probá nuevamente en unos segundos." };
       if (!response.ok) throw new Error(payload.error);
+      await exportMonthlyClosureWorkbook(payload.closure);
       await loadClosures();
       return {
         type: "ok",
-        month: payload.closure?.month || month,
-        drive: Boolean(payload.saved?.driveFile),
-        driveError: payload.saved?.driveError || null
+        month: payload.closure?.month || month
       };
     } catch (err) {
       return { type: "error", error: err.message };
