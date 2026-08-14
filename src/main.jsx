@@ -25,9 +25,11 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import * as XLSXStyle from "xlsx-js-style";
 import "./styles.css";
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "" : "http://127.0.0.1:4100");
+const EXCEL_LIB = XLSXStyle.default || XLSXStyle;
 const SHEETS = [
   { id: "resumen", label: "Resumen Ejecutivo" },
   { id: "seguimiento", label: "Seguimiento" },
@@ -341,11 +343,6 @@ function cleanSheetName(name) {
   return String(name).replace(/[\\/?*[\]:]/g, " ").slice(0, 31);
 }
 
-async function loadExcelLibrary() {
-  const module = await import("xlsx-js-style");
-  return module.default || module;
-}
-
 const EXPORT_LABELS = {
   indicador: "Indicador",
   valor: "Valor",
@@ -528,7 +525,7 @@ function addJsonSheet(XLSX, workbook, name, rows) {
 
 async function exportDashboardWorkbook(data, closures, filters) {
   if (!data) return;
-  const XLSX = await loadExcelLibrary();
+  const XLSX = EXCEL_LIB;
   const workbook = XLSX.utils.book_new();
   const filterRows = Object.entries(filters || {}).map(([filtro, valor]) => ({ filtro, valor }));
   addJsonSheet(XLSX, workbook, "Filtros", filterRows.length ? filterRows : [{ filtro: "Sin filtros", valor: "" }]);
@@ -590,7 +587,7 @@ async function exportDashboardWorkbook(data, closures, filters) {
 
 async function exportMonthlyClosureWorkbook(closure) {
   if (!closure) return;
-  const XLSX = await loadExcelLibrary();
+  const XLSX = EXCEL_LIB;
   const workbook = XLSX.utils.book_new();
   addJsonSheet(XLSX, workbook, "Resumen", [
     { indicador: "Mes", valor: closure.month },
