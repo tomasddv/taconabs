@@ -71,19 +71,25 @@ export async function saveMonthlyClosure({ closure, rootDir, folderId }) {
   await fs.writeFile(localPath, text, "utf8");
 
   let driveFile = null;
+  let driveError = null;
   if (hasDriveCredentials()) {
-    driveFile = await uploadTextToDrive({
-      text,
-      fileName,
-      mimeType: "application/json",
-      folderId
-    });
+    try {
+      driveFile = await uploadTextToDrive({
+        text,
+        fileName,
+        mimeType: "application/json",
+        folderId
+      });
+    } catch (error) {
+      driveError = error.message || "No se pudo guardar en Drive.";
+    }
   }
 
   return {
     fileName,
     localPath,
-    driveFile
+    driveFile,
+    driveError
   };
 }
 

@@ -57,6 +57,7 @@ export async function getDriveClient() {
 export async function uploadFileToDrive({ filePath, fileName, mimeType, folderId }) {
   const drive = await getDriveClient();
   const result = await drive.files.create({
+    supportsAllDrives: true,
     requestBody: {
       name: fileName,
       parents: folderId ? [folderId] : undefined
@@ -73,6 +74,7 @@ export async function uploadFileToDrive({ filePath, fileName, mimeType, folderId
 export async function uploadTextToDrive({ text, fileName, mimeType = "application/json", folderId }) {
   const drive = await getDriveClient();
   const result = await drive.files.create({
+    supportsAllDrives: true,
     requestBody: {
       name: fileName,
       parents: folderId ? [folderId] : undefined
@@ -93,6 +95,8 @@ export async function listDriveFiles({ folderId, namePrefix }) {
   if (namePrefix) queryParts.push(`name contains '${namePrefix.replace(/'/g, "\\'")}'`);
   const result = await drive.files.list({
     q: queryParts.join(" and "),
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
     fields: "files(id,name,webViewLink,createdTime,modifiedTime)",
     orderBy: "name desc",
     pageSize: 100
@@ -102,6 +106,6 @@ export async function listDriveFiles({ folderId, namePrefix }) {
 
 export async function downloadDriveText(fileId) {
   const drive = await getDriveClient();
-  const result = await drive.files.get({ fileId, alt: "media" }, { responseType: "text" });
+  const result = await drive.files.get({ fileId, alt: "media", supportsAllDrives: true }, { responseType: "text" });
   return typeof result.data === "string" ? result.data : JSON.stringify(result.data);
 }

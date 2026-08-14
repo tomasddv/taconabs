@@ -263,7 +263,7 @@ function MonthlyHistoryPanel({ closures, data, onCloseMonth, closingMonth }) {
             {status.type === "ok"
               ? status.drive
                 ? `Cierre ${status.month} guardado en Drive.`
-                : `Cierre ${status.month} generado localmente. Falta credencial para guardar en Drive.`
+                : `Cierre ${status.month} generado localmente. Drive no lo guardo: ${status.driveError || "falta credencial o permisos."}`
               : status.error}
           </div>
         ) : null}
@@ -457,7 +457,8 @@ function App() {
       return {
         type: "ok",
         month: payload.closure?.month || month,
-        drive: Boolean(payload.saved?.driveFile)
+        drive: Boolean(payload.saved?.driveFile),
+        driveError: payload.saved?.driveError || null
       };
     } catch (err) {
       return { type: "error", error: err.message };
