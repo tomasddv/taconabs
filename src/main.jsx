@@ -320,23 +320,194 @@ function cleanSheetName(name) {
   return String(name).replace(/[\\/?*[\]:]/g, " ").slice(0, 31);
 }
 
-function addJsonSheet(XLSX, workbook, name, rows) {
-  const safeRows = (rows || []).map((row) => {
-    const clean = {};
-    for (const [key, value] of Object.entries(row || {})) {
-      if (value === null || value === undefined) clean[key] = "";
-      else if (typeof value === "object") clean[key] = JSON.stringify(value);
-      else clean[key] = value;
+async function loadExcelLibrary() {
+  const module = await import("xlsx-js-style");
+  return module.default || module;
+}
+
+const EXPORT_LABELS = {
+  indicador: "Indicador",
+  valor: "Valor",
+  filtro: "Filtro",
+  mes: "Mes",
+  month: "Mes",
+  fecha: "Fecha",
+  date: "Fecha",
+  fechaCierre: "Fecha cierre",
+  closedAt: "Fecha cierre",
+  sourceFile: "Archivo fuente",
+  archivo: "Archivo",
+  label: "Nombre",
+  name: "Nombre",
+  promotor: "Promotor",
+  vendedor: "Vendedor",
+  seller: "Promotor",
+  supervisor: "Supervisor",
+  negocio: "Negocio",
+  business: "Negocio",
+  grupoProducto: "Grupo producto",
+  productGroup: "Grupo producto",
+  marca: "Marca",
+  brand: "Marca",
+  calibre: "Calibre",
+  caliber: "Calibre",
+  sku: "SKU",
+  skus: "SKUs",
+  cliente: "Cliente",
+  client: "Cliente",
+  clienteId: "Cliente ID",
+  clientes: "CCC",
+  ccc: "CCC",
+  facturas: "Facturas",
+  invoices: "Facturas",
+  hl: "HL",
+  importe: "Importe",
+  importeNeto: "Importe neto",
+  importeFinal: "Importe final",
+  objective: "Objetivo",
+  objetivo: "Objetivo",
+  real: "Real",
+  avance: "Avance",
+  progress: "Avance",
+  faltante: "Faltante",
+  missing: "Faltante",
+  tendencia: "Tendencia",
+  projectedClose: "Tendencia cierre",
+  tendenciaAvance: "Tend. avance",
+  semaforo: "Semáforo",
+  status: "Semáforo",
+  guardado: "Guardado",
+  storage: "Guardado",
+  rows: "Registros",
+  totalRows: "Registros",
+  loadedRows: "Registros cargados",
+  generatedRows: "Registros incluidos",
+  duplicates: "Duplicados",
+  missingHeaders: "Columnas faltantes",
+  combos: "Combos",
+  combo: "Combo",
+  comboProductos: "Líneas combo",
+  activacionesDia: "Activaciones día",
+  nuevosDia: "Nuevos día",
+  clientesUnicos: "Clientes únicos",
+  activosMes: "Acum. activos mes"
+};
+
+function prettyExportLabel(key) {
+  if (EXPORT_LABELS[key]) return EXPORT_LABELS[key];
+  return String(key)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function cleanExportValue(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return value;
+}
+
+function orderedKeys(rows) {
+  const keys = [];
+  for (const row of rows) {
+    for (const key of Object.keys(row || {})) {
+      if (!keys.includes(key)) keys.push(key);
     }
-    return clean;
+  }
+  return keys.length ? keys : ["mensaje"];
+}
+
+function excelNumberFormat(label) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("avance") || normalized.includes("%")) return "0.0%";
+  if (normalized.includes("importe")) return '$ #,##0';
+  if (normalized === "hl") return "#,##0.0";
+  if (
+    normalized.includes("ccc") ||
+    normalized.includes("sku") ||
+    normalized.includes("factura") ||
+    normalized.includes("registro") ||
+    normalized.includes("cliente") ||
+    normalized.includes("objetivo") ||
+    normalized.includes("real") ||
+    normalized.includes("faltante") ||
+    normalized.includes("tendencia") ||
+    normalized.includes("combo")
+  ) {
+    return "#,##0";
+  }
+  return "#,##0.00";
+}
+
+function addJsonSheet(XLSX, workbook, name, rows) {
+  const safeRows = rows?.length ? rows : [{ mensaje: "Sin datos" }];
+  const keys = orderedKeys(safeRows);
+  const headers = keys.map(prettyExportLabel);
+  const body = safeRows.map((row) => keys.map((key) => cleanExportValue(row?.[key])));
+  const sheet = XLSX.utils.aoa_to_sheet([[name], headers, ...body]);
+  const lastCol = Math.max(headers.length - 1, 0);
+  const lastRow = body.length + 1;
+
+  sheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }];
+  sheet["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 1, c: 0 }, e: { r: lastRow, c: lastCol } }) };
+  sheet["!freeze"] = { xSplit: 0, ySplit: 2 };
+  sheet["!cols"] = headers.map((header, index) => {
+    const maxBody = body.reduce((max, row) => Math.max(max, String(row[index] ?? "").length), 0);
+    return { wch: Math.min(Math.max(header.length + 2, maxBody + 2, 12), 42) };
   });
-  const sheet = XLSX.utils.json_to_sheet(safeRows.length ? safeRows : [{ mensaje: "Sin datos" }]);
+
+  const titleStyle = {
+    font: { bold: true, color: { rgb: "FFFFFF" }, sz: 16 },
+    fill: { fgColor: { rgb: "102A43" } },
+    alignment: { horizontal: "left", vertical: "center" }
+  };
+  const headerStyle = {
+    font: { bold: true, color: { rgb: "FFFFFF" } },
+    fill: { fgColor: { rgb: "0F766E" } },
+    alignment: { horizontal: "center", vertical: "center" },
+    border: {
+      top: { style: "thin", color: { rgb: "D9E2EC" } },
+      bottom: { style: "thin", color: { rgb: "D9E2EC" } },
+      left: { style: "thin", color: { rgb: "D9E2EC" } },
+      right: { style: "thin", color: { rgb: "D9E2EC" } }
+    }
+  };
+  const cellBorder = {
+    bottom: { style: "thin", color: { rgb: "E6EEF5" } }
+  };
+
+  for (let column = 0; column <= lastCol; column += 1) {
+    const titleAddress = XLSX.utils.encode_cell({ r: 0, c: column });
+    if (!sheet[titleAddress]) sheet[titleAddress] = { t: "s", v: "" };
+    sheet[titleAddress].s = titleStyle;
+
+    const headerAddress = XLSX.utils.encode_cell({ r: 1, c: column });
+    sheet[headerAddress].s = headerStyle;
+  }
+
+  for (let rowIndex = 0; rowIndex < body.length; rowIndex += 1) {
+    const fill = rowIndex % 2 === 0 ? "F8FBFD" : "FFFFFF";
+    for (let column = 0; column <= lastCol; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: rowIndex + 2, c: column });
+      if (!sheet[address]) continue;
+      sheet[address].s = {
+        fill: { fgColor: { rgb: fill } },
+        border: cellBorder,
+        alignment: { vertical: "center" }
+      };
+      if (typeof sheet[address].v === "number") {
+        sheet[address].z = excelNumberFormat(headers[column]);
+      }
+    }
+  }
+
   XLSX.utils.book_append_sheet(workbook, sheet, cleanSheetName(name));
 }
 
 async function exportDashboardWorkbook(data, closures, filters) {
   if (!data) return;
-  const XLSX = await import("xlsx");
+  const XLSX = await loadExcelLibrary();
   const workbook = XLSX.utils.book_new();
   const filterRows = Object.entries(filters || {}).map(([filtro, valor]) => ({ filtro, valor }));
   addJsonSheet(XLSX, workbook, "Filtros", filterRows.length ? filterRows : [{ filtro: "Sin filtros", valor: "" }]);
@@ -398,7 +569,7 @@ async function exportDashboardWorkbook(data, closures, filters) {
 
 async function exportMonthlyClosureWorkbook(closure) {
   if (!closure) return;
-  const XLSX = await import("xlsx");
+  const XLSX = await loadExcelLibrary();
   const workbook = XLSX.utils.book_new();
   addJsonSheet(XLSX, workbook, "Resumen", [
     { indicador: "Mes", valor: closure.month },
